@@ -3,6 +3,7 @@ data/*
 data/data_temp/*
 !data/.placeholder
 !data/data_temp/.placeholder
+
 manager.ipynb
 .DS_store
 .DS_store/*
