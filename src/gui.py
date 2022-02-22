@@ -116,6 +116,7 @@ class GUI():
             kkey=val[0]
             if kkey not in self.assigned_points.keys():
                 print("key press",kkey)
+                return
             coord=np.array([val[1],val[2],self.z]).astype(np.float32)
             if self.assigned_points[kkey] is not None:
                 if (-0.5<coord[0]<(self.W+0.5)) and (-0.5<coord[1]<(self.H+0.5)) and (-0.5<coord[2]<(self.D+0.5)):
