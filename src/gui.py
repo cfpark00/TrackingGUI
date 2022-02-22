@@ -81,7 +81,6 @@ class GUI():
             self.time=val
             self.update_time()
         elif key=="update_data":
-            
             if self.close:
                 return
             if self.z==-1:
@@ -171,14 +170,14 @@ class GUI():
             if np.isnan(loc[0]):
                 return
             ti,tf=val
-            if ti<tf:
+            if ti>tf:
                 return
             not_gt=np.nonzero(np.isnan(self.points[ti-1:tf,self.highlighted,0]))[0]+ti-1
             self.points[not_gt,self.highlighted,:]=loc[None]
             print("Extended",self.highlighted,"from",ti,"to",tf)
         elif key=="delete":
             ti,tf=val
-            if ti<tf:
+            if ti>tf:
                 return
             self.points[ti-1:tf,self.highlighted,:]=np.nan
             print("Deleted",self.highlighted,"from",ti,"to",tf)
@@ -186,7 +185,7 @@ class GUI():
             if self.helper is None:
                 return
             ti,tf=val
-            if ti<tf:
+            if ti>tf:
                 return
             locs=self.helper[:,self.highlighted]
             not_gt=np.nonzero(np.isnan(self.points[ti-1:tf,self.highlighted,0]))[0]+ti-1
