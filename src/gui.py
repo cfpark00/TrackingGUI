@@ -101,6 +101,7 @@ class GUI():
             pt_type[self.highlighted]=-3
             
             points=np.concatenate([coords,pt_type[:,None]],axis=1)
+            self.plotpoints=points
             data["points"]=points
             
             label="Frame: "+str(self.time)+self.Tstr
@@ -114,6 +115,8 @@ class GUI():
             self.last_update_t=time.time()            
         elif key=="fig_keypress":
             kkey=val[0]
+            if kkey not in self.assigned_points.keys():
+                print("key press",kkey)
             coord=np.array([val[1],val[2],self.z]).astype(np.float32)
             if self.assigned_points[kkey] is not None:
                 if (-0.5<coord[0]<(self.W+0.5)) and (-0.5<coord[1]<(self.H+0.5)) and (-0.5<coord[2]<(self.D+0.5)):
@@ -121,8 +124,10 @@ class GUI():
                     self.points[self.time-1,i_point]=coord       
         elif key=="fig_click":
             if val[0]==1:
-                coords=self.points[self.time-1]
+                coords=self.plotpoints[:,:3]
                 valid=~np.isnan(coords[:,0])
+                if np.sum(valid)==0:
+                    return
                 indices=np.nonzero(valid)[0]
                 dists=np.linalg.norm(coords[valid]-np.array([val[1],val[2],self.z])[None,:],axis=1)
                 am=np.argmin(dists)
@@ -161,6 +166,32 @@ class GUI():
             self.timer.stop()
         elif key=="timer_start":
             self.timer.start(1000/self.fps)
+        elif key=="extend":
+            loc=self.points[self.time-1,self.highlighted]
+            if np.isnan(loc[0]):
+                return
+            ti,tf=val
+            if ti<tf:
+                return
+            not_gt=np.nonzero(np.isnan(self.points[ti-1:tf,self.highlighted,0]))[0]+ti-1
+            self.points[not_gt,self.highlighted,:]=loc[None]
+            print("Extended",self.highlighted,"from",ti,"to",tf)
+        elif key=="delete":
+            ti,tf=val
+            if ti<tf:
+                return
+            self.points[ti-1:tf,self.highlighted,:]=np.nan
+            print("Deleted",self.highlighted,"from",ti,"to",tf)
+        elif key=="approve":
+            if self.helper is None:
+                return
+            ti,tf=val
+            if ti<tf:
+                return
+            locs=self.helper[:,self.highlighted]
+            not_gt=np.nonzero(np.isnan(self.points[ti-1:tf,self.highlighted,0]))[0]+ti-1
+            self.points[not_gt,self.highlighted,:]=locs[not_gt]
+            print("Approved",self.highlighted,"of helper",self.win.annotate_tab.get_current_helper_name(),"from",ti,"to",tf)
         else:
             print(key,val)
         
@@ -226,8 +257,10 @@ class Window(QMainWindow):
                 rightgrid=QGridLayout()
                 if True:
                     self.plotstab=QTabWidget()
+                    #self.plotstab.setFixedSize(self.gui.settings["screen_w"]//5,self.gui.settings["screen_h"]//3)
                     if True:
                         self.dashboard_tab=DashboardTab(self.gui)
+                        self.plotstab.setFixedSize(self.dashboard_tab.sizeHint().width(),self.gui.settings["screen_h"]//3)
                         self.plots_tab=PlotsTab(self.gui)
                         self.minimap_tab=MinimapTab(self.gui)
 
@@ -253,9 +286,11 @@ class Window(QMainWindow):
                         self.controlstab.tabBar().setTabTextColor(2,QtGui.QColor(0,0,0))
                         self.controlstab.addTab(self.analysis_tab,"Analysis")
                         self.controlstab.tabBar().setTabTextColor(3,QtGui.QColor(0,0,0))
-
+                        
+                    self.gototimewidget=GoToTimeWidget(self.gui)
                     rightgrid.addWidget(self.plotstab,0,0)
                     rightgrid.addWidget(self.controlstab,1,0)
+                    rightgrid.addWidget(self.gototimewidget,2,0)
                 maingrid.addLayout(topgrid,0,0)
                 maingrid.addLayout(leftgrid,1,0)
                 maingrid.addLayout(rightgrid,1,1)

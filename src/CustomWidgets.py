@@ -114,6 +114,7 @@ class Annotated3DFig(pg.PlotWidget):
         self.scene().sigMouseMoved.connect(self.mousetracker)
         self.scene().sigMouseClicked.connect(self.mouseclick)
         self.inn=False
+        self.mouse_current=None
         
         self.levels=np.repeat(np.array([[0,255]]),self.n_channels,axis=0)[:,:,None,None]
         self.gammas=np.ones(self.n_channels,dtype=np.float32)[:,None,None]
@@ -124,7 +125,9 @@ class Annotated3DFig(pg.PlotWidget):
         im=data["image"]
         im=np.divide((im-self.levels[:,0]),(self.levels[:,1]-self.levels[:,0]),
             where=self.levels[:,1]>self.levels[:,0],out=np.zeros_like(im,dtype=np.float32))
+        im=np.clip(im,0,1)
         im=im**self.gammas
+        #print(np.min(im),np.max(im),self.gammas)
         im=im.transpose(1,2,0)@self.channel_colors
         self.image.setImage(im[:,:,:],autoLevels=False,levels=[0,255])
         
@@ -193,7 +196,7 @@ class Annotated3DFig(pg.PlotWidget):
         if key==Qt.Key_Space:
             self.plotItem.vb.enableAutoRange()
         else:
-            if self.inn:
+            if self.inn and (self.mouse_current is not None):
                 pos=self.plotItem.vb.mapSceneToView(self.mouse_current)
                 self.gui.respond("fig_keypress",[event.text(),pos.x()-0.5,pos.y()-0.5])
 
@@ -232,7 +235,7 @@ class AnnotateTab(QWidget):
         self.approve_button.setEnabled(False)
         self.approve_button.clicked.connect(self.make_annotate_signal_func("approve"))
         self.grid.addWidget(self.approve_button,row,0,1,1)
-        self.amin=QLineEdit("0")
+        self.amin=QLineEdit("1")
         self.amin.setValidator(QtGui.QIntValidator(1,T))
         self.grid.addWidget(self.amin,row,1,1,1)
         self.amax=QLineEdit(str(T))
@@ -245,7 +248,7 @@ class AnnotateTab(QWidget):
         self.extend_button.setEnabled(False)
         self.extend_button.clicked.connect(self.make_annotate_signal_func("extend"))
         self.grid.addWidget(self.extend_button,row,0,1,1)
-        self.emin=QLineEdit("0")
+        self.emin=QLineEdit("1")
         self.emin.setValidator(QtGui.QIntValidator(1,T))
         self.grid.addWidget(self.emin,row,1,1,1)
         self.emax=QLineEdit(str(T))
@@ -258,7 +261,7 @@ class AnnotateTab(QWidget):
         self.delete_button.setEnabled(False)
         self.delete_button.clicked.connect(self.make_annotate_signal_func("delete"))
         self.grid.addWidget(self.delete_button,row,0,1,1)
-        self.dmin=QLineEdit("0")
+        self.dmin=QLineEdit("1")
         self.dmin.setValidator(QtGui.QIntValidator(1,T))
         self.grid.addWidget(self.dmin,row,1,1,1)
         self.dmax=QLineEdit(str(T))
@@ -301,9 +304,13 @@ class AnnotateTab(QWidget):
             try:
                 mM=[int(txt) for txt in mM]
             except:
-                print("Range invalid")
+                pass
+                #print("Range invalid")
             self.gui.respond(code,mM)
         return annotate_signal_func
+        
+    def get_current_helper_name(self):
+        return self.helper_names[self.helper_select.currentIndex()]
         
 class ViewTab(QWidget):
     def __init__(self,gui):
@@ -636,13 +643,13 @@ class PlotsTab(pg.PlotWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
-        self.setFixedSize(self.gui.settings["screen_w"]//6,self.gui.settings["screen_h"]//4)
+        #self.setFixedSize(self.gui.settings["screen_w"]//6,self.gui.settings["screen_h"]//4)
 
 class MinimapTab(pg.PlotWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
-        self.setFixedSize(self.gui.settings["screen_w"]//6,self.gui.settings["screen_h"]//4)
+        #self.setFixedSize(self.gui.settings["screen_w"]//6,self.gui.settings["screen_h"]//4)
         
 class UtilityBar(QWidget):
     def __init__(self,gui):
@@ -793,6 +800,34 @@ class TimeSliderWidget(LabeledSlider):
             self.sl.blockSignals(True)
             self.sl.setValue(time)
             self.sl.blockSignals(False)
+            
+class GoToTimeWidget(QWidget):
+    def __init__(self,gui):
+        super().__init__()
+        self.gui=gui
+        self.grid=QGridLayout()
+        T=self.gui.data_info["T"]
+        
+        self.goto_button=QPushButton("Go To Time:")
+        self.goto_button.setStyleSheet("background-color : rgb(93,177,130); border-radius: 4px; min-height: 20px")
+        self.goto_button.clicked.connect(self.make_gototime_function())
+        self.grid.addWidget(self.goto_button,0,0,1,1)
+        self.tedit=QLineEdit("1")
+        self.tedit.setValidator(QtGui.QIntValidator(1,T))
+        self.grid.addWidget(self.tedit,0,1,1,1)
+        self.setLayout(self.grid)
+        
+    def make_gototime_function(self):
+        def gototime_function():
+            t=self.tedit.text()
+            try:
+                t=int(t)
+                return self.gui.respond("time_change",t)
+            except Exception as ex:
+                pass
+                #print(ex)
+        return gototime_function
+    
         
         
         

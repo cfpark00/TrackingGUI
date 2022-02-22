@@ -14,4 +14,4 @@ settings_file_path=args.settings_file_path
 settings=load_settings(settings_file_path)
 gui=GUI(file_path,settings)
 gui.start()
-print("Gui closed succesfully")
+print("GUI closed succesfully")
