@@ -23,12 +23,12 @@ class Dataset:
     def get_frame(self,time):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
-            return np.array(self.data[str(time-1)+"/frame"])
+            return np.array(self.data[str(time)+"/frame"])
             
     def get_frame_z(self,time,z):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
-            return np.array(self.data[str(time-1)+"/frame"][:,:,:,z])
+            return np.array(self.data[str(time)+"/frame"][:,:,:,z])
             
     def get_data_info(self):
         assert self.data is not None, "file not open"
@@ -46,7 +46,6 @@ class Dataset:
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
             return np.array(self.data["points"])
-    
             
     def set_points(self,points):
         assert self.data is not None, "file not open"
@@ -90,12 +89,14 @@ class Dataset:
             ds[...]=coords
             self.data.attrs["N_points"]=self.data.attrs["N_points"]+n_add
             
-            
-            
-            
-            
-            
-            
+    def set_data(self,name,data):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            if name in self.data.keys():
+                del self.data[name]
+            ds=self.data.create_dataset(name,shape=data.shape,dtype=data.dtype)
+            ds[...]=data
+
             
             
             

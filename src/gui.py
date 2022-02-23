@@ -84,9 +84,9 @@ class GUI():
             if self.close:
                 return
             if self.z==-1:
-                data={"image":self.dataset.get_frame(self.time).max(3)}
+                data={"image":self.dataset.get_frame(self.time-1).max(3)}
             else:
-                data={"image":self.dataset.get_frame_z(self.time,self.z)}
+                data={"image":self.dataset.get_frame_z(self.time-1,self.z)}
             coords=self.points[self.time-1].copy()
             pt_type=np.full(coords.shape[0],-1)
             if self.helper is not None:
@@ -119,7 +119,7 @@ class GUI():
                 return
             coord=np.array([val[1],val[2],self.z]).astype(np.float32)
             if self.assigned_points[kkey] is not None:
-                if (-0.5<coord[0]<(self.W+0.5)) and (-0.5<coord[1]<(self.H+0.5)) and (-0.5<coord[2]<(self.D+0.5)):
+                if (-0.5<coord[0]<(self.W-0.5)) and (-0.5<coord[1]<(self.H-0.5)) and (-0.5<coord[2]<(self.D-0.5)):
                     i_point=self.assigned_points[kkey]
                     self.points[self.time-1,i_point]=coord       
         elif key=="fig_click":

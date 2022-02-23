@@ -5,6 +5,7 @@ class CPD():
         pass
         
     def __call__(self,file_path):
+        print("CPD on",file_path)
         pass
         
 methods={"CPD":CPD,}
