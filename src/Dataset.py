@@ -94,12 +94,12 @@ class Dataset:
             ret=[]
         return ret
         
-    def get_series(self,name):
+    def get_data(self,name):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
-            key="series_"+name
+            key=name
             if key not in self.data.keys():
-                print("Series not present, bug")
+                print("Data not present, bug")
                 return None
             else:
                 return np.array(self.data[key])
@@ -107,10 +107,10 @@ class Dataset:
     def get_series_names(self):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
-            ret=[]
-            for key in self.data.keys():
-                if key[:7]=="series_":
-                    ret.append(key[7:])
+            if "series_names" in self.data.attrs.keys():
+                return self.data.attrs["series_names"]
+            else:
+                return []
         else:
             ret=[]
         return ret
