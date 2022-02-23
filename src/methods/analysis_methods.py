@@ -50,7 +50,7 @@ class GaussianIntegral():
         valids=self.get_valids(locs)
         result=np.full((len(locs),self.C),np.nan)
         inds=np.nonzero(valids)[0]
-        for ind,pix in zip(inds,locs):
+        for ind,pix in zip(inds,locs[valids]):
             coords=self.coord_grid+pix[:,None,None,None]
             vals=np.stack([sim.map_coordinates(image[c], coords, order=1) for c in range(self.C)],axis=0)
             vals=(vals*self.kernel[None]).sum(axis=(1,2,3))
