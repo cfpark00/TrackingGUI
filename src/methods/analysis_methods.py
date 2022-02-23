@@ -34,8 +34,9 @@ class GaussianIntegral():
                 print()
         except Exception as ex:
             print(ex)
+        dataset.set_data("GaussianIntegral",intensities)
         dataset.close()
-        #set_data(self,name,data)
+        
     
     def get_valids(self,locs):
         nonan=~np.isnan(locs[:,0])
