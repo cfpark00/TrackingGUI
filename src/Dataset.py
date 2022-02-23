@@ -39,6 +39,7 @@ class Dataset:
                 "H":self.data.attrs["H"],
                 "D":self.data.attrs["D"],
                 "N_points":self.data.attrs["N_points"],
+                "description":self.data.attrs["description"] if "description" in self.data.attrs.keys() else "",
                 }
             return dict
             

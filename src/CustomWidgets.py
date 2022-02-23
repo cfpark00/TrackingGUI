@@ -684,7 +684,6 @@ class DashboardTab(QWidget):
         row=0
         for buttons in self.buttonss:
             if row==Tlen:
-                row+=1
                 break
             for j,button in enumerate(buttons):
                 present=subpresence[row,j]
