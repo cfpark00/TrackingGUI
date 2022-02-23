@@ -205,6 +205,8 @@ class GUI():
             not_gt=np.nonzero(np.isnan(self.points[ti-1:tf,self.highlighted,0]))[0]+ti-1
             self.points[not_gt,self.highlighted,:]=locs[not_gt]
             print("Approved",self.highlighted,"of helper",self.win.annotate_tab.get_current_helper_name(),"from",ti,"to",tf)
+        elif key=="transpose":
+            self.win.figurewidget.set_transpose(val)
         else:
             print(key,val)
         

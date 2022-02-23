@@ -111,6 +111,7 @@ class Annotated3DFig(pg.PlotWidget):
         self.invertY(False)
         self.hideAxis("bottom")
         self.hideAxis("left")
+        self.transposed=False
         
         self.scene().sigMouseMoved.connect(self.mousetracker)
         self.scene().sigMouseClicked.connect(self.mouseclick)
@@ -129,7 +130,10 @@ class Annotated3DFig(pg.PlotWidget):
         im=np.clip(im,0,1)
         im=im**self.gammas
         #print(np.min(im),np.max(im),self.gammas)
-        im=im.transpose(1,2,0)@self.channel_colors
+        if self.transposed:
+            im=im.transpose(2,1,0)@self.channel_colors
+        else:
+            im=im.transpose(1,2,0)@self.channel_colors
         self.image.setImage(im[:,:,:],autoLevels=False,levels=[0,255])
         
         points=data["points"]
@@ -148,10 +152,12 @@ class Annotated3DFig(pg.PlotWidget):
         pens[pt_type==-3]=self.pen_highlight
         pens=pens[valid]
 
-        
-        self.scatter.setData(x=coords[:,0]+0.5,y=coords[:,1]+0.5,pen=pens,brush=None,
-            size=self.size_func(np.abs(coords[:,2]-z)),pxMode=True)
-
+        if self.transposed:
+            self.scatter.setData(x=coords[:,1]+0.5,y=coords[:,0]+0.5,pen=pens,brush=None,
+                size=self.size_func(np.abs(coords[:,2]-z)),pxMode=True)
+        else:
+            self.scatter.setData(x=coords[:,0]+0.5,y=coords[:,1]+0.5,pen=pens,brush=None,
+                size=self.size_func(np.abs(coords[:,2]-z)),pxMode=True)
         self.label.setText(data["label"])
         self.plotItem.vb.disableAutoRange()
 
@@ -187,7 +193,10 @@ class Annotated3DFig(pg.PlotWidget):
     def mouseclick(self,event):
         if self.inn:
             pos=self.plotItem.vb.mapSceneToView(event.scenePos())
-            self.gui.respond("fig_click",[event.button(),pos.x()-0.5,pos.y()-0.5])
+            if self.transposed:
+                self.gui.respond("fig_click",[event.button(),pos.y()-0.5,pos.x()-0.5])
+            else:
+                self.gui.respond("fig_click",[event.button(),pos.x()-0.5,pos.y()-0.5])
     
     def wheelEvent(self,event):
         self.gui.respond("fig_scroll",event.angleDelta().y())
@@ -199,8 +208,15 @@ class Annotated3DFig(pg.PlotWidget):
         else:
             if self.inn and (self.mouse_current is not None):
                 pos=self.plotItem.vb.mapSceneToView(self.mouse_current)
-                self.gui.respond("fig_keypress",[event.text(),pos.x()-0.5,pos.y()-0.5])
-
+                if self.transposed:
+                    self.gui.respond("fig_keypress",[event.text(),pos.y()-0.5,pos.x()-0.5])
+                else:
+                    self.gui.respond("fig_keypress",[event.text(),pos.x()-0.5,pos.y()-0.5])
+                    
+    def set_transpose(self,val):
+        self.transposed=val
+        self.enableAutoRange()         
+        
 class AnnotateTab(QWidget):
     def __init__(self,gui):
         super().__init__()
@@ -330,76 +346,83 @@ class ViewTab(QWidget):
         if n_channels>channel_colors.shape[0]:
             channel_colors=np.concatenate([channel_colors,np.full((n_channels-channel_colors.shape[0],3),0)],axis=0)
         max_100gamma=int(float(self.gui.settings["max_gamma"])*100)
+        
+        row=0
+        self.transpose=QCheckBox("Transpose")
+        self.transpose.toggled.connect(lambda x:self.gui.respond("transpose",x))
+        self.grid.addWidget(self.transpose,row,0,1,3*n_channels)
+        row+=1
+        
         for i_channel in range(1,n_channels+1):
             c=channel_colors[i_channel-1]
             if True:
-                row=0
+                subrow=row
                 label=QLabel("Channel "+str(i_channel))
-                self.grid.addWidget(label,row,3*(i_channel-1),1,3)
-                row+=1
+                self.grid.addWidget(label,subrow,3*(i_channel-1),1,3)
+                subrow+=1
                 
                 label=QLabel("Min")
-                self.grid.addWidget(label,row,3*(i_channel-1),1,3)
-                row+=1
+                self.grid.addWidget(label,subrow,3*(i_channel-1),1,3)
+                subrow+=1
                 min_slider=QSlider(Qt.Horizontal)
                 min_slider.setMinimum(0)
                 min_slider.setMaximum(255)
                 min_slider.setValue(0)
                 min_slider.valueChanged.connect(self.make_slider_change_func("min_"+str(i_channel)))
-                self.grid.addWidget(min_slider,row,3*(i_channel-1),1,3)
-                row+=1
+                self.grid.addWidget(min_slider,subrow,3*(i_channel-1),1,3)
+                subrow+=1
                 
                 label=QLabel("Max")
-                self.grid.addWidget(label,row,3*(i_channel-1),1,3)
-                row+=1
+                self.grid.addWidget(label,subrow,3*(i_channel-1),1,3)
+                subrow+=1
                 max_slider=QSlider(Qt.Horizontal)
                 max_slider.setMinimum(0)
                 max_slider.setMaximum(255)
                 max_slider.setValue(255)
                 max_slider.valueChanged.connect(self.make_slider_change_func("max_"+str(i_channel)))
-                self.grid.addWidget(max_slider,row,3*(i_channel-1),1,3)
-                row+=1
+                self.grid.addWidget(max_slider,subrow,3*(i_channel-1),1,3)
+                subrow+=1
                 
                 label=QLabel("Gamma")
-                self.grid.addWidget(label,row,3*(i_channel-1),1,3)
-                row+=1
+                self.grid.addWidget(label,subrow,3*(i_channel-1),1,3)
+                subrow+=1
                 gamma_slider=QSlider(Qt.Horizontal)
                 gamma_slider.setMinimum(0)
                 gamma_slider.setMaximum(max_100gamma)
                 gamma_slider.setValue(100)
                 gamma_slider.valueChanged.connect(self.make_slider_change_func("gamma_"+str(i_channel)))
-                self.grid.addWidget(gamma_slider,row,3*(i_channel-1),1,3)
-                row+=1
+                self.grid.addWidget(gamma_slider,subrow,3*(i_channel-1),1,3)
+                subrow+=1
                 
                 label=QLabel("R")
-                self.grid.addWidget(label,row,3*(i_channel-1),1,1)
+                self.grid.addWidget(label,subrow,3*(i_channel-1),1,1)
                 label=QLabel("G")
-                self.grid.addWidget(label,row,3*(i_channel-1)+1,1,1)
+                self.grid.addWidget(label,subrow,3*(i_channel-1)+1,1,1)
                 label=QLabel("B")
-                self.grid.addWidget(label,row,3*(i_channel-1)+2,1,1)
-                row+=1
+                self.grid.addWidget(label,subrow,3*(i_channel-1)+2,1,1)
+                subrow+=1
                 
                 r_slider=QSlider(Qt.Vertical)
                 r_slider.setMinimum(0)
                 r_slider.setMaximum(255)
                 r_slider.setValue(channel_colors[i_channel-1,0])
                 r_slider.valueChanged.connect(self.make_slider_change_func("r_"+str(i_channel)))
-                self.grid.addWidget(r_slider,row,3*(i_channel-1),1,1)
+                self.grid.addWidget(r_slider,subrow,3*(i_channel-1),1,1)
 
                 g_slider=QSlider(Qt.Vertical)
                 g_slider.setMinimum(0)
                 g_slider.setMaximum(255)
                 g_slider.setValue(channel_colors[i_channel-1,1])
                 g_slider.valueChanged.connect(self.make_slider_change_func("g_"+str(i_channel)))
-                self.grid.addWidget(g_slider,row,3*(i_channel-1)+1,1,1)
+                self.grid.addWidget(g_slider,subrow,3*(i_channel-1)+1,1,1)
 
                 b_slider=QSlider(Qt.Vertical)
                 b_slider.setMinimum(0)
                 b_slider.setMaximum(255)
                 b_slider.setValue(channel_colors[i_channel-1,2])
                 b_slider.valueChanged.connect(self.make_slider_change_func("b_"+str(i_channel)))
-                self.grid.addWidget(b_slider,row,3*(i_channel-1)+2,1,1)
-                row+=1
+                self.grid.addWidget(b_slider,subrow,3*(i_channel-1)+2,1,1)
+                subrow+=1
         self.setLayout(self.grid)
     
     def make_slider_change_func(self,code):
