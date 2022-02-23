@@ -159,6 +159,7 @@ class GUI():
             else:
                 self.helper=self.dataset.get_helper(val)
         elif key=="renew_helpers":
+            self.helper=None
             self.win.annotate_tab.renew_helper_list()
         elif key=="load_signal":
             if val=="":
@@ -167,7 +168,9 @@ class GUI():
                 self.signal=self.dataset.get_signal(val)
                 self.win.plots_tab.update_plot()
         elif key=="renew_signals":
+            self.signal=None
             self.win.analysis_tab.renew_signal_list()
+            self.win.plots_tab.update_plot()
         elif key=="follow":
             self.follow=val
         elif key=="save":
