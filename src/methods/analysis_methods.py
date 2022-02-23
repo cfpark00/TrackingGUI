@@ -14,7 +14,7 @@ class GaussianIntegral():
         kernel/=kernel.sum()
         self.kernel=kernel
         self.coord_grid=np.stack([x,y,z],axis=0)
-        
+
     def __call__(self,file_path):
         dataset=Dataset(file_path)
         dataset.open()
@@ -36,8 +36,8 @@ class GaussianIntegral():
             print(ex)
         dataset.set_data("GaussianIntegral",intensities)
         dataset.close()
-        
-    
+
+
     def get_valids(self,locs):
         nonan=~np.isnan(locs[:,0])
         locs=np.nan_to_num(locs)
@@ -45,15 +45,16 @@ class GaussianIntegral():
         iny=(self.ym<locs[:,1])*(locs[:,1]<self.yM)
         inz=(self.zm<locs[:,2])*(locs[:,2]<self.zM)
         return nonan*inx*iny*inz
-    
+
     def get_values(self,locs,image):
         valids=self.get_valids(locs)
         result=np.full((len(locs),self.C),np.nan)
         inds=np.nonzero(valids)[0]
-        for ind,pix in zip(inds,locs):
+        for ind,pix in zip(inds,locs[valids]):
             coords=self.coord_grid+pix[:,None,None,None]
             vals=np.stack([sim.map_coordinates(image[c], coords, order=1) for c in range(self.C)],axis=0)
             vals=(vals*self.kernel[None]).sum(axis=(1,2,3))
+
             result[ind,:]=vals
         return result
 
