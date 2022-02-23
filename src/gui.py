@@ -43,6 +43,7 @@ class GUI():
         self.W,self.H=self.data_info["W"],self.data_info["H"]
         
         self.helper=None
+        self.signal=None
         self.highlighted=0
         self.follow=False
 
@@ -157,6 +158,16 @@ class GUI():
                 self.helper=None
             else:
                 self.helper=self.dataset.get_helper(val)
+        elif key=="renew_helpers":
+            self.win.annotate_tab.renew_helper_list()
+        elif key=="load_signal":
+            if val=="":
+                self.signal=None
+            else:
+                self.signal=self.dataset.get_signal(val)
+                self.win.plots_tab.update_plot()
+        elif key=="renew_signals":
+            self.win.analysis_tab.renew_signal_list()
         elif key=="follow":
             self.follow=val
         elif key=="save":
@@ -166,16 +177,18 @@ class GUI():
             self.timer.stop()
         elif key=="timer_start":
             self.timer.start(1000/self.fps)
-        elif key=="extend":
-            loc=self.points[self.time-1,self.highlighted]
-            if np.isnan(loc[0]):
-                return
+        elif key=="lin_intp":
             ti,tf=val
             if ti>tf:
                 return
-            not_gt=np.nonzero(np.isnan(self.points[ti-1:tf,self.highlighted,0]))[0]+ti-1
-            self.points[not_gt,self.highlighted,:]=loc[None]
-            print("Extended",self.highlighted,"from",ti,"to",tf)
+            loci,locf=self.points[ti-1,self.highlighted],self.points[tf-1,self.highlighted]
+            if np.isnan(loci[0]) or np.isnan(locf[1]):
+                print("Both bounds should be Annotated")
+                return
+            not_gt_inds=np.nonzero(np.isnan(self.points[ti-1:tf,self.highlighted,0]))[0]
+            locs=loci[None,:]+(locf-loci)[None,:]*(not_gt_inds[:,None]/(tf-ti))
+            self.points[not_gt_inds+ti-1,self.highlighted,:]=locs
+            print("Linearly Interpolated",self.highlighted,"from",ti,"to",tf)
         elif key=="delete":
             ti,tf=val
             if ti>tf:
@@ -208,23 +221,22 @@ class GUI():
             self.update_z()
         self.win.timesliderwidget.update_time(self.time)
         self.win.dashboard_tab.update_time(self.time)
+        self.win.plots_tab.update_time(self.time)
 
-        
     def update_presence(self):
-        #print("upd")
         #0 for absent, 1 for present, 2 for highlighted absent, 3 for highlighted present
         presence=(~np.isnan(self.points[:,:,0])).astype(np.int16)
         presence[:,self.highlighted]+=2
         self.win.pointbarwidget.recolor(presence[self.time-1])
-        self.win.dashboard_tab.recolor(presence,self.time,self.assigned_points)
+        self.win.dashboard_tab.recolor(presence)
         self.win.annotate_tab.highlight(self.highlighted)
         
     def update_z(self):
         self.z=np.clip(int(self.z_float+0.5),-1,self.D-1)
     
     def update_assigned(self):
-        self.win.pointbarwidget.update_assigned(self.assigned_points)
-        self.win.figurewidget.update_assigned(self.assigned_points)
+        self.win.pointbarwidget.update_assigned()
+        self.win.plots_tab.update_plot()
 
 class Window(QMainWindow):
     def __init__(self,gui):

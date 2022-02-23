@@ -35,6 +35,7 @@ class GaussianIntegral():
         except Exception as ex:
             print(ex)
         dataset.set_data("GaussianIntegral",intensities)
+        dataset.set_data("signal_GaussianIntegral",intensities[:,:,1]/intensities[:,:,0])
         dataset.close()
 
 

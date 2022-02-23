@@ -8,6 +8,7 @@ import numpy as np
 import time
 from src.methods import analysis_methods
 from src.methods import tracking_methods
+import threading
 
 class PointBarWidget(QScrollArea):
     def __init__(self,gui):
@@ -50,10 +51,10 @@ class PointBarWidget(QScrollArea):
             self.gui.respond("highlight",i_point)
         return click_select_function
 
-    def update_assigned(self,assigned_points):
+    def update_assigned(self):
         for i_point in range(1,self.N_points+1):
             self.pointbuttons[i_point][1].setText("")
-        for key,i_point in assigned_points.items():
+        for key,i_point in self.gui.assigned_points.items():
             if i_point is not None:
                 self.pointbuttons[i_point][1].setText(key)
 
@@ -200,9 +201,6 @@ class Annotated3DFig(pg.PlotWidget):
                 pos=self.plotItem.vb.mapSceneToView(self.mouse_current)
                 self.gui.respond("fig_keypress",[event.text(),pos.x()-0.5,pos.y()-0.5])
 
-    def update_assigned(self,assigned_pointss):
-        pass
-
 class AnnotateTab(QWidget):
     def __init__(self,gui):
         super().__init__()
@@ -243,10 +241,10 @@ class AnnotateTab(QWidget):
         self.grid.addWidget(self.amax,row,2,1,1)
         row+=1
         
-        self.extend_button=QPushButton("Extend GT")
+        self.extend_button=QPushButton("Linear Interpolate GT")
         self.extend_button.setStyleSheet("background-color : rgb(243,175,61); border-radius: 4px; min-height: 20px")
         self.extend_button.setEnabled(False)
-        self.extend_button.clicked.connect(self.make_annotate_signal_func("extend"))
+        self.extend_button.clicked.connect(self.make_annotate_signal_func("lin_intp"))
         self.grid.addWidget(self.extend_button,row,0,1,1)
         self.emin=QLineEdit("1")
         self.emin.setValidator(QtGui.QIntValidator(1,T))
@@ -297,7 +295,7 @@ class AnnotateTab(QWidget):
         def annotate_signal_func():
             if code=="approve":
                 mM=[self.amin.text(),self.amax.text()]
-            elif code=="extend":
+            elif code=="lin_intp":
                 mM=[self.emin.text(),self.emax.text()]
             elif code=="delete":
                 mM=[self.dmin.text(),self.dmax.text()]
@@ -311,6 +309,15 @@ class AnnotateTab(QWidget):
         
     def get_current_helper_name(self):
         return self.helper_names[self.helper_select.currentIndex()]
+    
+    def renew_helper_list(self):
+        self.helper_select.currentIndexChanged.disconnect()
+        self.helper_select.clear()
+        self.helper_names=[""]+self.gui.dataset.get_helper_names()
+        for name in self.helper_names:
+            self.helper_select.addItem(name)
+        self.helper_select.setCurrentIndex(0)
+        self.helper_select.currentIndexChanged.connect(lambda x:self.gui.respond("load_helper",self.helper_names[x]))
         
 class ViewTab(QWidget):
     def __init__(self,gui):
@@ -400,7 +407,6 @@ class ViewTab(QWidget):
             self.gui.respond("view_change",[code,val])
         return slider_change_func
 
-    
 class TrackTab(QWidget):
     def __init__(self,gui):
         super().__init__()
@@ -440,6 +446,13 @@ class TrackTab(QWidget):
         return run_function
     
     def run(self,method_name,params):
+        msgbox=QMessageBox()
+        msgbox.setText("Confirm Run")
+        msgbox.setInformativeText("Run "+method_name+" with "+params+"?")
+        msgbox.setStandardButtons(QMessageBox.Yes|QMessageBox.No)
+        res=msgbox.exec()
+        if res==QMessageBox.No:
+            return
         self.gui.respond("save")
         self.gui.respond("timer_stop")
         self.gui.dataset.close()
@@ -453,9 +466,9 @@ class TrackTab(QWidget):
             result=ex
             print("Run Failed")
         self.gui.dataset.open()
+        self.gui.respond("renew_helpers")
         self.gui.respond("timer_start")
         return result
-
 
 class AnalysisTab(QWidget):
     def __init__(self,gui):
@@ -486,6 +499,15 @@ class AnalysisTab(QWidget):
         self.grid.addWidget(self.run_button,row,0)
         row+=1
         
+        self.signal_select=QComboBox()
+        self.signal_names=[""]+self.gui.dataset.get_signal_names()
+        for name in self.signal_names:
+            self.signal_select.addItem(name)
+        self.signal_select.setCurrentIndex(0)
+        self.signal_select.currentIndexChanged.connect(lambda x:self.gui.respond("load_signal",self.signal_names[x]))
+        self.grid.addWidget(self.signal_select,row,0)
+        row+=1
+        
         self.setLayout(self.grid)
     
     def make_run_function(self):
@@ -496,10 +518,18 @@ class AnalysisTab(QWidget):
         return run_function
         
     def run(self,method_name,params):
+        msgbox=QMessageBox()
+        msgbox.setText("Confirm Run")
+        msgbox.setInformativeText("Run "+method_name+" with "+params+"?")
+        msgbox.setStandardButtons(QMessageBox.Yes|QMessageBox.No)
+        res=msgbox.exec()
+        if res==QMessageBox.No:
+            return
         self.gui.respond("save")
         self.gui.respond("timer_stop")
         self.gui.dataset.close()
         print("Running",method_name,"with",params)
+        
         try:
             method=self.methods[method_name](params)
             result=method(self.gui.dataset.file_path)
@@ -509,9 +539,19 @@ class AnalysisTab(QWidget):
             result=ex
             print("Run Failed")
         self.gui.dataset.open()
+        self.gui.respond("renew_signals")
         self.gui.respond("timer_start")
         return result
-
+        
+    def renew_signal_list(self):
+        self.signal_select.currentIndexChanged.disconnect()
+        self.signal_select.clear()
+        self.signal_names=[""]+self.gui.dataset.get_signal_names()
+        for name in self.signal_names:
+            self.signal_select.addItem(name)
+        self.signal_select.setCurrentIndex(0)
+        self.signal_select.currentIndexChanged.connect(lambda x:self.gui.respond("load_signal",self.signal_names[x]))
+        
 class DashboardTab(QWidget):
     def __init__(self,gui):
         super().__init__()
@@ -605,14 +645,14 @@ class DashboardTab(QWidget):
         self.scrollarea.ensureWidgetVisible(self.current_label_button)
         self.current_label_button.setStyleSheet("background-color : rgb(42,99,246); border-radius: 4px;")
     
-    def recolor(self,presence,time,assigned_points):
-        chunknumber=(time-1)//self.chunksize
+    def recolor(self,presence):
+        chunknumber=(self.gui.time-1)//self.chunksize
         Ti=chunknumber*self.chunksize
         Tf=min((chunknumber+1)*self.chunksize,self.T)
         Tlen=Tf-Ti
         subpresence=np.zeros((Tlen,len(self.keys)))
         for i,key in enumerate(self.keys):
-            i_point=assigned_points[key]
+            i_point=self.gui.assigned_points[key]
             if i_point is None:
                 subpresence[:,i]=-1
             else:
@@ -635,21 +675,96 @@ class DashboardTab(QWidget):
             
         for i in range(row,self.chunksize):
             for button in self.buttonss[i]:
-                button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")
-            
+                button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")    
         
-        
-class PlotsTab(pg.PlotWidget):
+class PlotsTab(QTabWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
-        #self.setFixedSize(self.gui.settings["screen_w"]//6,self.gui.settings["screen_h"]//4)
+        self.T=self.gui.data_info["T"]
+        
+        self.plot=Plot(self.gui)
+        self.plot.setLabel("bottom","Time")
+        self.set_axis_labels([])
+        self.line=self.plot.addLine(x=1)
+        self.t_vals=np.arange(1,self.T+1)
+        
+        self.addTab(self.plot,"Plot")
+        self.tabBar().setTabTextColor(0,QtGui.QColor(0,0,0))
+        
+        self.choosergrid=QGridLayout()
+        self.chooser = QListView()
+        self.model = QtGui.QStandardItemModel()
+        for series_name in self.gui.dataset.get_series_names():
+            item = QtGui.QStandardItem(series_name)
+            item.setCheckable(True)
+            self.model.appendRow(item)
+        self.chooser.setModel(self.model)
+        self.choosergrid.addWidget(self.chooser,0,0)
+        self.choosergrid.setRowStretch(0,10)
+        self.plotbutton = QPushButton('Update')
+        self.plotbutton.setStyleSheet("background-color : rgb(93,177,130); border-radius: 4px; min-width: 40px; min-height: 20px")
+        self.plotbutton.clicked.connect(self.update_plot)
+        self.choosergrid.addWidget(self.plotbutton,1,0)
+        self.choosergrid.setRowStretch(1,1)
+        
+        widget=QWidget()
+        widget.setLayout(self.choosergrid)
+        self.addTab(widget,"Choose Series")
+        self.tabBar().setTabTextColor(1,QtGui.QColor(0,0,0))
+    
+    def set_axis_labels(self,names):
+        stringaxis = pg.AxisItem(orientation='left')
+        stringaxis.setTicks( [dict(zip(np.arange(len(names))+0.5,names)).items()] )
+        self.plot.setAxisItems(axisItems = {'left': stringaxis})
+    
+    def normalize_series(self,series):
+        valid=~np.isnan(series)
+        if valid.sum()<2:
+            return None
+        else:
+            m,M=series[valid].min(),series[valid].max()
+            if not (M>m):
+                return None
+            series=(series-m)/(M-m)
+            return series
+    
+    def update_plot(self):
+        seriess={}
+        for i in range(self.model.rowCount()):
+            item=self.model.item(i)
+            if item.checkState()==Qt.Checked:
+                name=item.text()
+                seriess[name]=self.gui.dataset.get_series(name)
+        if self.gui.signal is not None:
+            for key,val in self.gui.assigned_points.items():
+                if val is None:
+                    continue
+                seriess[key+"["+str(val)+"]"]=self.gui.signal[:,val]
+        self.setCurrentIndex(0)
+        self.plot.clear()
+        self.set_axis_labels(list(seriess.keys()))
+        self.line=self.plot.addLine(x=self.gui.time)
+        base=0
+        for name,series in seriess.items():
+            series=self.normalize_series(series)
+            if series is not None:
+                self.plot.plot(x=self.t_vals,y=series+base,pen=pg.mkPen(width=1, color=(0,255,0)))
+            base+=1
+        self.plot.enableAutoRange()
+        
+    def update_time(self,time):
+        self.line.setValue(time)
+
+class Plot(pg.PlotWidget):
+    def __init__(self,gui):
+        super().__init__()
+        self.gui=gui
 
 class MinimapTab(pg.PlotWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
-        #self.setFixedSize(self.gui.settings["screen_w"]//6,self.gui.settings["screen_h"]//4)
         
 class UtilityBar(QWidget):
     def __init__(self,gui):
@@ -827,8 +942,5 @@ class GoToTimeWidget(QWidget):
                 pass
                 #print(ex)
         return gototime_function
-    
-        
-        
-        
+
         
