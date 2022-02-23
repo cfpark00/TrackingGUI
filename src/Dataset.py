@@ -61,8 +61,6 @@ class Dataset:
                 return None
             else:
                 return np.array(self.data[key])
-                
-        return retdict
         
     def get_helper_names(self):
         assert self.data is not None, "file not open"
@@ -74,7 +72,49 @@ class Dataset:
         else:
             ret=[]
         return ret
-
+        
+    def get_signal(self,name):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            key="signal_"+name
+            if key not in self.data.keys():
+                print("Signal not present, bug")
+                return None
+            else:
+                return np.array(self.data[key])
+        
+    def get_signal_names(self):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            ret=[]
+            for key in self.data.keys():
+                if key[:7]=="signal_":
+                    ret.append(key[7:])
+        else:
+            ret=[]
+        return ret
+        
+    def get_series(self,name):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            key="series_"+name
+            if key not in self.data.keys():
+                print("Series not present, bug")
+                return None
+            else:
+                return np.array(self.data[key])
+        
+    def get_series_names(self):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            ret=[]
+            for key in self.data.keys():
+                if key[:7]=="series_":
+                    ret.append(key[7:])
+        else:
+            ret=[]
+        return ret
+            
     def add_points(self,n_add):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
