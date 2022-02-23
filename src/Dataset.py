@@ -114,7 +114,18 @@ class Dataset:
         else:
             ret=[]
         return ret
-            
+        
+    def get_series_labels(self):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            if "series_labels" in self.data.attrs.keys():
+                return self.data.attrs["series_labels"]
+            else:
+                return []
+        else:
+            ret=[]
+        return ret
+        
     def add_points(self,n_add):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":

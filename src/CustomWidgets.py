@@ -754,11 +754,12 @@ class PlotsTab(QTabWidget):
     
     def update_plot(self):
         seriess={}
+        series_labels=self.gui.dataset.get_series_labels()
         for i in range(self.model.rowCount()):
             item=self.model.item(i)
             if item.checkState()==Qt.Checked:
                 name=item.text()
-                seriess[name]=self.gui.dataset.get_data(name)
+                seriess[series_labels[i]]=self.gui.dataset.get_data(name)
         if self.gui.signal is not None:
             for key,val in self.gui.assigned_points.items():
                 if val is None:
