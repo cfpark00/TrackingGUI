@@ -10,6 +10,7 @@ import time
 import sys
 import pyqtgraph as pg
 import numpy as np
+import scipy.interpolate as sintp
 
 class GUI():
     def __init__(self,file_path,settings):
@@ -184,13 +185,16 @@ class GUI():
             ti,tf=val
             if ti>tf:
                 return
-            loci,locf=self.points[ti-1,self.highlighted],self.points[tf-1,self.highlighted]
-            if np.isnan(loci[0]) or np.isnan(locf[1]):
-                print("Both bounds should be Annotated")
+            locs=self.points[ti-1:tf,self.highlighted]
+            if np.sum(~np.isnan(locs[0]))<2:
+                print("At least 2 annotations needed")
                 return
-            not_gt_inds=np.nonzero(np.isnan(self.points[ti-1:tf,self.highlighted,0]))[0]
-            locs=loci[None,:]+(locf-loci)[None,:]*(not_gt_inds[:,None]/(tf-ti))
-            self.points[not_gt_inds+ti-1,self.highlighted,:]=locs
+            isgt=~np.isnan(self.points[ti-1:tf,self.highlighted,0])
+            gt_inds=np.nonzero(isgt)[0]
+            not_gt_inds=np.nonzero(~isgt)[0]
+            intp_func=sintp.interp1d(gt_inds, locs[gt_inds], kind='linear', axis=0, bounds_error=False, fill_value=np.nan)
+            locs_res=intp_func(not_gt_inds)
+            self.points[not_gt_inds+ti-1,self.highlighted,:]=locs_res
             print("Linearly Interpolated",self.highlighted,"from",ti,"to",tf)
         elif key=="delete":
             ti,tf=val
