@@ -10,6 +10,7 @@ import torch
 import shutil
 import numpy as np
 device="cuda" if torch.cuda.is_available() else "cpu"
+print("using",device)
 
 parser = argparse.ArgumentParser(description='Adds points to a dataset')
 parser.add_argument('file_path', help='file_path')
