@@ -1,5 +1,6 @@
 import h5py
 import numpy as np
+import os
 supported_suffixes=["h5"]
 
 class Dataset:
@@ -8,6 +9,12 @@ class Dataset:
         self.suffix=self.file_path.split(".")[-1]
         assert self.suffix in supported_suffixes, suffix+" not supported"
         self.data=None
+        
+    def make(self):
+        assert not os.path.exists(self.file_path),"File already present"
+        if self.suffix=="h5":
+            h5=h5py.File(self.file_path,"w")
+            h5.close()
 
     def open(self):
         assert self.data is  None, "file already open"
@@ -24,6 +31,33 @@ class Dataset:
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
             return np.array(self.data[str(time)+"/frame"])
+    
+    def rename_data(self,name_before,name_after,overwrite=False):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            if name_before==name_after:
+                return
+            ds=self.data[name_before]
+            if overwrite and name_after in self.data.keys():
+                del self.data[name_after]
+            dsnew=self.data.create_dataset(name_after,ds.shape,ds.dtype,ds.compression)
+            dsnew=ds
+            del ds
+    
+    def set_frame(self,time,frame,shape_change=False,compression="lzf"):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            key=str(time)+"/frame"
+            if key not in self.data.keys():
+                ds=self.data.create_dataset(key,frame.shape,frame.dtype,compression=compression)
+                ds[...]=frame
+            else:
+                if not shape_change:
+                    self.data[key][...]=frame
+                else:
+                    del self.data[key]
+                    ds=self.data.create_dataset(key,frame.shape,frame.dtype,compression=compression)
+                    ds[...]=frame
             
     def get_frame_z(self,time,z):
         assert self.data is not None, "file not open"
@@ -42,6 +76,12 @@ class Dataset:
                 "description":self.data.attrs["description"] if "description" in self.data.attrs.keys() else "",
                 }
             return dict
+    
+    def update_data_info(self,dict):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            for key,val in dict.items():
+                self.data.attrs[key]=val
             
     def get_points(self):
         assert self.data is not None, "file not open"
@@ -141,13 +181,23 @@ class Dataset:
             ds[...]=coords
             self.data.attrs["N_points"]=self.data.attrs["N_points"]+n_add
             
-    def set_data(self,name,data):
+    def set_data(self,name,data,compression="lzf",overwrite=False):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            if name in self.data.keys():
+                if overwrite:
+                    del self.data[name]
+                else:
+                    print("Cannot update",name,"with option overwrite=False")
+                    return
+            ds=self.data.create_dataset(name,shape=data.shape,dtype=data.dtype,compression=compression)
+            ds[...]=data
+    
+    def remove(self,name):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
             if name in self.data.keys():
                 del self.data[name]
-            ds=self.data.create_dataset(name,shape=data.shape,dtype=data.dtype)
-            ds[...]=data
 
             
             

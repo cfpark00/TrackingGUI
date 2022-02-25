@@ -1,43 +1,52 @@
 import numpy as np
 import os
 import sys
-import scipy.ndimage as sim
 sys.path.append(os.getcwd())
 from src.Dataset import *
 
-class GaussianIntegral():
+import numpy as np
+import scipy.ndimage as sim
+import threading
+
+class GaussianIntegralClass():
     def __init__(self,params):
-        self.parameters={"sigma_x":1.5,"sigma_y":1.5,"sigma_z":0.4,"ker_x":7,"ker_y":7,"ker_z":1}
-        arrs=[np.arange(self.parameters[key])-self.parameters[key]//2 for key in ["ker_x","ker_y","ker_z"]]
+        self.params={"sigma_x":1.5,"sigma_y":1.5,"sigma_z":0.4,"ker_x":7,"ker_y":7,"ker_z":1}
+        self.params.update(params)
+
+        arrs=[np.arange(self.params[key])-self.params[key]//2 for key in ["ker_x","ker_y","ker_z"]]
         x,y,z=np.meshgrid(*arrs,indexing="ij")
-        kernel=np.exp(-0.5*((x/self.parameters["sigma_x"])**2+(y/self.parameters["sigma_y"])**2+(z/self.parameters["sigma_z"])**2))
+        kernel=np.exp(-0.5*((x/self.params["sigma_x"])**2+(y/self.params["sigma_y"])**2+(z/self.params["sigma_z"])**2))
         kernel/=kernel.sum()
         self.kernel=kernel
         self.coord_grid=np.stack([x,y,z],axis=0)
+        self.state=""
+        self.cancel=False
 
-    def __call__(self,file_path):
+
+    def run(self,file_path):
         dataset=Dataset(file_path)
         dataset.open()
-        try:
-            points=dataset.get_points()
-            self.data_info=dataset.get_data_info()
-            self.C=self.data_info["C"]
-            self.xm,self.xM=-0.5+self.parameters["ker_x"]//2,self.data_info["W"]-0.5-self.parameters["ker_x"]//2
-            self.ym,self.yM=-0.5+self.parameters["ker_y"]//2,self.data_info["H"]-0.5-self.parameters["ker_y"]//2
-            self.zm,self.zM=-0.5+self.parameters["ker_z"]//2,self.data_info["D"]-0.5-self.parameters["ker_z"]//2
-            intensities=np.full((self.data_info["T"],self.data_info["N_points"]+1,self.C),np.nan)
-            for time in range(1,self.data_info["T"]+1):
-                print("\r"+str(time)+"/"+str(self.data_info["T"]),end="")
-                image=dataset.get_frame(time-1)
-                locs=points[time-1]
-                intensities[time-1,:,:]=self.get_values(locs,image)
-                print()
-        except Exception as ex:
-            print(ex)
-        dataset.set_data("GaussianIntegral",intensities)
-        dataset.set_data("signal_GaussianIntegral",intensities[:,:,1]/intensities[:,:,0])
-        dataset.close()
 
+        points=dataset.get_points()
+        self.data_info=dataset.get_data_info()
+        self.C=self.data_info["C"]
+        self.xm,self.xM=-0.5+self.params["ker_x"]//2,self.data_info["W"]-0.5-self.params["ker_x"]//2
+        self.ym,self.yM=-0.5+self.params["ker_y"]//2,self.data_info["H"]-0.5-self.params["ker_y"]//2
+        self.zm,self.zM=-0.5+self.params["ker_z"]//2,self.data_info["D"]-0.5-self.params["ker_z"]//2
+        intensities=np.full((self.data_info["T"],self.data_info["N_points"]+1,self.C),np.nan)
+        self.state=["Integrating",0]
+        for t in range(1,self.data_info["T"]+1):
+            if self.cancel:
+                return
+            image=dataset.get_frame(t-1)
+            locs=points[t-1]
+            intensities[t-1,:,:]=self.get_values(locs,image)
+            self.state=["Integrating",int(100*(t/self.data_info["T"]))]
+
+        dataset.set_data("GaussianIntegral",intensities,overwrite=True)
+        dataset.set_data("signal_GaussianIntegral",intensities[:,:,1]/intensities[:,:,0],overwrite=True)
+        dataset.close()
+        self.state="Done"
 
     def get_valids(self,locs):
         nonan=~np.isnan(locs[:,0])
@@ -59,6 +68,21 @@ class GaussianIntegral():
             result[ind,:]=vals
         return result
 
-
+def GaussianIntegral(command_pipe_sub,file_path,params):
+    method=GaussianIntegralClass(params)
+    thread=threading.Thread(target=method.run,args=(file_path,))
+    while True:
+        command=command_pipe_sub.recv()
+        if command=="run":
+            thread.start()
+        elif command=="report":
+            command_pipe_sub.send(method.state)
+        elif command=="cancel":
+            method.cancel=True
+            thread.join()
+            break
+        elif command=="close":
+            thread.join()
+            break
 
 methods={"Gaussian Integral":GaussianIntegral,}

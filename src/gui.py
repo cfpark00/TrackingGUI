@@ -228,9 +228,9 @@ class GUI():
                     if not np.isnan(ztarg_helper):
                         self.z_float=ztarg_helper
             self.update_z()
-        self.win.timesliderwidget.update_time(self.time)
-        self.win.dashboard_tab.update_time(self.time)
-        self.win.plots_tab.update_time(self.time)
+        self.win.timesliderwidget.update_time()
+        self.win.dashboard_tab.update_time()
+        self.win.plots_tab.update_time()
 
     def update_presence(self):
         #0 for absent, 1 for present, 2 for highlighted absent, 3 for highlighted present
