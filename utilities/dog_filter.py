@@ -52,8 +52,9 @@ if not inplace:
     if os.path.exists(file_to_path):
         if overwrite:
             os.remove(file_to_path)
-        print(file_to_path,"already present")
-        sys.exit()
+        else:
+            print(file_to_path,"already present")
+            sys.exit()
     shutil.copyfile(file_path,file_to_path)
     new_dataset=Dataset(file_to_path)
     new_dataset.open()
