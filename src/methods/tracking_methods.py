@@ -44,6 +44,7 @@ class NNClass():
         self.data_info=self.dataset.get_data_info()
         os.makedirs(os.path.join(self.folpath,"frames"))
         os.makedirs(os.path.join(self.folpath,"masks"))
+        os.makedirs(os.path.join(self.folpath,"log"))
         
         self.state=["Making Files",0]
         T,N_points,C,W,H,D=self.data_info["T"],self.data_info["N_points"],self.data_info["C"],self.data_info["W"],self.data_info["H"],self.data_info["D"]
@@ -90,6 +91,7 @@ class NNClass():
             loader=torch.utils.data.DataLoader(data, batch_size=self.params["batch_size_posture"],shuffle=True,num_workers=4,pin_memory=True)
             opt=torch.optim.Adam(self.encnet.parameters(),lr=self.params["lr"])
             n_epoch=self.params["n_epoch_posture"]
+            f=open(os.path.join(self.folpath,"log","enc_loss.txt"),"w")
             for epoch in range(n_epoch):
                 for i,ims in enumerate(loader):
                     if self.cancel:
@@ -102,7 +104,8 @@ class NNClass():
                     loss.backward()
                     opt.step()
                     self.state[1]=int(100*(epoch*T+i+1)/(n_epoch*T) )
-                    #print(self.state)
+                    f.write(str(loss.item())+"\n")
+            f.close()
             
             self.state=["Embedding Posture Space Evaluating",0]
             self.encnet.eval()
