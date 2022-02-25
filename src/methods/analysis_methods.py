@@ -10,15 +10,18 @@ import threading
 
 class GaussianIntegralClass():
     def __init__(self,params):
-        self.parameters={"sigma_x":1.5,"sigma_y":1.5,"sigma_z":0.4,"ker_x":7,"ker_y":7,"ker_z":1}
-        arrs=[np.arange(self.parameters[key])-self.parameters[key]//2 for key in ["ker_x","ker_y","ker_z"]]
+        self.params={"sigma_x":1.5,"sigma_y":1.5,"sigma_z":0.4,"ker_x":7,"ker_y":7,"ker_z":1}
+        self.params.update(params)
+        
+        arrs=[np.arange(self.params[key])-self.params[key]//2 for key in ["ker_x","ker_y","ker_z"]]
         x,y,z=np.meshgrid(*arrs,indexing="ij")
-        kernel=np.exp(-0.5*((x/self.parameters["sigma_x"])**2+(y/self.parameters["sigma_y"])**2+(z/self.parameters["sigma_z"])**2))
+        kernel=np.exp(-0.5*((x/self.params["sigma_x"])**2+(y/self.params["sigma_y"])**2+(z/self.params["sigma_z"])**2))
         kernel/=kernel.sum()
         self.kernel=kernel
         self.coord_grid=np.stack([x,y,z],axis=0)
         self.state=""
         self.cancel=False
+        
         
     def run(self,file_path):
         dataset=Dataset(file_path)
@@ -27,9 +30,9 @@ class GaussianIntegralClass():
         points=dataset.get_points()
         self.data_info=dataset.get_data_info()
         self.C=self.data_info["C"]
-        self.xm,self.xM=-0.5+self.parameters["ker_x"]//2,self.data_info["W"]-0.5-self.parameters["ker_x"]//2
-        self.ym,self.yM=-0.5+self.parameters["ker_y"]//2,self.data_info["H"]-0.5-self.parameters["ker_y"]//2
-        self.zm,self.zM=-0.5+self.parameters["ker_z"]//2,self.data_info["D"]-0.5-self.parameters["ker_z"]//2
+        self.xm,self.xM=-0.5+self.params["ker_x"]//2,self.data_info["W"]-0.5-self.params["ker_x"]//2
+        self.ym,self.yM=-0.5+self.params["ker_y"]//2,self.data_info["H"]-0.5-self.params["ker_y"]//2
+        self.zm,self.zM=-0.5+self.params["ker_z"]//2,self.data_info["D"]-0.5-self.params["ker_z"]//2
         intensities=np.full((self.data_info["T"],self.data_info["N_points"]+1,self.C),np.nan)
         self.state=["Integrating",0]
         for t in range(1,self.data_info["T"]+1):
