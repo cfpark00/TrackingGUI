@@ -18,8 +18,8 @@ parser.add_argument('-file_to', default="", help="destination file")
 parser.add_argument('-inplace', action='store_true', help='inplace modifies file (default:False)')
 parser.add_argument('-overwrite', action='store_true', help='overwrites destination file (default:False)')
 
-parser.add_argument('-s1',default=0.5, help='inner Gaussian sigma')
-parser.add_argument('-s2',default=3, help='outer Gaussian sigma')
+parser.add_argument('-s1',type=int,default=0.5, help='inner Gaussian sigma')
+parser.add_argument('-s2',type=int,default=3, help='outer Gaussian sigma')
 parser.add_argument('-kernel_size',default=21,type=int, help='kernel_size in pixels(must be odd)')
 
 args=parser.parse_args()
