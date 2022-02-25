@@ -9,6 +9,7 @@ import time
 from src.methods import analysis_methods
 from src.methods import tracking_methods
 import threading
+from multiprocessing import Process,Pipe
 
 class PointBarWidget(QScrollArea):
     def __init__(self,gui):
@@ -479,19 +480,42 @@ class TrackTab(QWidget):
         self.gui.respond("save")
         self.gui.respond("timer_stop")
         self.gui.dataset.close()
-        print("Running",method_name,"with",params)
-        try:
-            method=self.methods[method_name](params)
-            result=method(self.gui.dataset.file_path)
-            print("Run Success")
-        except Exception as ex:
-            print(ex)
-            result=ex
-            print("Run Failed")
+        
+        progress=QProgressDialog("","cancel",-1,101)
+        labeltext="Running "+method_name+((" with "+params) if params!="" else "") +":\n"
+        progress.setLabelText(labeltext)
+        progress.showNormal()
+        progress.resize(500,100)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setValue(-1)
+        QApplication.processEvents()
+
+        command_pipe_main,command_pipe_sub=Pipe()
+        process = Process(target=self.methods[method_name], args=(command_pipe_sub,self.gui.dataset.file_path,params))
+        process.start()
+        command_pipe_main.send("run")
+        while True:
+            if progress.wasCanceled():
+                command_pipe_main.send("cancel")
+                break
+            command_pipe_main.send("report")
+            res=command_pipe_main.recv()
+            if res=="Done":
+                command_pipe_main.send("close")
+                break
+            else:
+                if type(res)==list:
+                    stepname,progress_value=res
+                    progress.setLabelText(labeltext+stepname)
+                    progress.setValue(progress_value)
+            QApplication.processEvents()
+        process.join()
+
+        progress.setValue(101)
         self.gui.dataset.open()
         self.gui.respond("renew_helpers")
         self.gui.respond("timer_start")
-        return result
+
 
 class AnalysisTab(QWidget):
     def __init__(self,gui):
@@ -551,20 +575,41 @@ class AnalysisTab(QWidget):
         self.gui.respond("save")
         self.gui.respond("timer_stop")
         self.gui.dataset.close()
-        print("Running",method_name,"with",params)
         
-        try:
-            method=self.methods[method_name](params)
-            result=method(self.gui.dataset.file_path)
-            print("Run Success")
-        except Exception as ex:
-            print(ex)
-            result=ex
-            print("Run Failed")
+        progress=QProgressDialog("","cancel",-1,101)
+        labeltext="Running "+method_name+((" with "+params) if params!="" else "") +":\n"
+        progress.setLabelText(labeltext)
+        progress.showNormal()
+        progress.resize(500,100)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setValue(-1)
+        QApplication.processEvents()
+        
+        command_pipe_main,command_pipe_sub=Pipe()
+        process = Process(target=self.methods[method_name], args=(command_pipe_sub,self.gui.dataset.file_path,params))
+        process.start()
+        command_pipe_main.send("run")
+        while True:
+            if progress.wasCanceled():
+                command_pipe_main.send("cancel")
+                break
+            command_pipe_main.send("report")
+            res=command_pipe_main.recv()
+            if res=="Done":
+                command_pipe_main.send("close")
+                break
+            else:
+                if type(res)==list:
+                    stepname,progress_value=res
+                    progress.setLabelText(labeltext+stepname)
+                    progress.setValue(progress_value)
+            QApplication.processEvents()
+        process.join()
+        
+        progress.setValue(101)
         self.gui.dataset.open()
         self.gui.respond("renew_signals")
         self.gui.respond("timer_start")
-        return result
         
     def renew_signal_list(self):
         self.signal_select.currentIndexChanged.disconnect()
@@ -590,7 +635,7 @@ class DashboardTab(QWidget):
         self.buttonss=[]
         for i in range(self.chunksize):
             row=[]
-            label_button=QPushButton(str(i+1) if i<=self.T else "")
+            label_button=QPushButton(str(i+1) if i<self.T else "")
             label_button.clicked.connect(self.make_button_press_function_t(i))
             label_button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")
             label_button.setFixedWidth(30)
@@ -655,16 +700,17 @@ class DashboardTab(QWidget):
             self.gui.respond("khighlight",j)
         return button_press_function
     
-    def update_time(self,time):
-        chunknumber=(time-1)//self.chunksize
+    def update_time(self):
+        t=self.gui.time
+        chunknumber=(t-1)//self.chunksize
         if self.chunknumber!=chunknumber:
             for i in range(self.chunksize):
                 t=self.chunksize*chunknumber+i+1
-                self.time_label_buttons[i].setText(str(t) if t<=self.T else "")
+                self.time_label_buttons[i].setText(str(t) if t<self.T else "")
             self.chunknumber=chunknumber
 
         self.current_label_button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")
-        self.current_label_button=self.time_label_buttons[(time-1)%self.chunksize]
+        self.current_label_button=self.time_label_buttons[(t-1)%self.chunksize]
         self.scrollarea.ensureWidgetVisible(self.current_label_button)
         self.current_label_button.setStyleSheet("background-color : rgb(42,99,246); border-radius: 4px;")
     
@@ -776,8 +822,9 @@ class PlotsTab(QTabWidget):
             base+=1
         self.plot.enableAutoRange()
         
-    def update_time(self,time):
-        self.line.setValue(time)
+    def update_time(self):
+        t=self.gui.time
+        self.line.setValue(t)
 
 class Plot(pg.PlotWidget):
     def __init__(self,gui):
@@ -933,10 +980,11 @@ class TimeSliderWidget(LabeledSlider):
         super(TimeSliderWidget,self).__init__(minimum=1, maximum=T, interval=int(T/n_labels))
         self.sl.valueChanged.connect(lambda :self.gui.respond("time_change",self.sl.value()))
 
-    def update_time(self,time):
-        if self.sl.value()!=time:
+    def update_time(self):
+        t=self.gui.time
+        if self.sl.value()!=t:
             self.sl.blockSignals(True)
-            self.sl.setValue(time)
+            self.sl.setValue(t)
             self.sl.blockSignals(False)
             
 class GoToTimeWidget(QWidget):

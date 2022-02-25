@@ -1,6 +1,5 @@
 import argparse
 
-
 parser = argparse.ArgumentParser(description='Adds points to a dataset')
 parser.add_argument('file_path', help='file_path')
 

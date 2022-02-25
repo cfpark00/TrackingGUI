@@ -2,5 +2,5 @@ conda create --name TrackingGUI python==3.9.7
 
 conda activate TrackingGUI
 
-conda install numpy scipy pyqtgraph h5py pyqt
+conda install numpy scipy pyqtgraph h5py pyqt tqdm
 
