@@ -2,7 +2,6 @@ import os
 import sys
 sys.path.append(os.getcwd())
 from src.Dataset import *
-from src.methods.neural_network_tools import nntools
 
 import os
 import shutil
@@ -27,6 +26,7 @@ class NNClass():
         assert self.params["min_points"]>0
         
     def run(self,file_path):
+        from src.methods.neural_network_tools import nntools
         import torch
         from src.methods.neural_network_tools import Networks
         if self.params["Targeted"] and self.params["umap_dim"] is not None:
