@@ -18,8 +18,8 @@ parser.add_argument('-file_to', default="", help="destination file")
 parser.add_argument('-inplace', action='store_true', help='inplace modifies file (default:False)')
 parser.add_argument('-overwrite', action='store_true', help='overwrites destination file (default:False)')
 
-parser.add_argument('-s1',type=int,default=0.5, help='inner Gaussian sigma')
-parser.add_argument('-s2',type=int,default=3, help='outer Gaussian sigma')
+parser.add_argument('-s1',type=float,default=0.5, help='inner Gaussian sigma')
+parser.add_argument('-s2',type=float,default=3, help='outer Gaussian sigma')
 parser.add_argument('-kernel_size',default=21,type=int, help='kernel_size in pixels(must be odd)')
 
 args=parser.parse_args()
@@ -76,7 +76,7 @@ for t in tqdm(range(1,data_info["T"]+1)):
         dataset.set_frame(t-1,res,shape_change=False)
 dataset.close()
 if not inplace:
-    C,W,H,D=res.shape    
+    C,W,H,D=res.shape
     new_data_info={"W":W,"H":H}
     new_dataset.update_data_info(new_data_info)
     new_dataset.close()

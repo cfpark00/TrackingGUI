@@ -64,7 +64,6 @@ class GaussianIntegralClass():
             coords=self.coord_grid+pix[:,None,None,None]
             vals=np.stack([sim.map_coordinates(image[c], coords, order=1) for c in range(self.C)],axis=0)
             vals=(vals*self.kernel[None]).sum(axis=(1,2,3))
-
             result[ind,:]=vals
         return result
 

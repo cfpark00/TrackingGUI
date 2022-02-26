@@ -15,6 +15,14 @@ import matplotlib.pyplot as plt
 
 class NNClass():
     def __init__(self,params):
+        params_dict={}
+        try:
+            if params!="":
+                for eq in params.split(";"):
+                    key,val=eq.split("=")
+                    params_dict[key]=eval(val)
+        except:
+            print("param parse failed")
         self.state=""
         self.cancel=False
         self.params={"min_points":1,"channels":None,"mask_radius":4,
@@ -22,9 +30,9 @@ class NNClass():
         "n_epoch":300,"batch_size":3,"augment":{0:"comp_cut",100:"aff_cut",200:"aff"},
         "Targeted":False,"n_epoch_posture":5,"batch_size_posture":16,"umap_dim":None,
         }
-        self.params.update(params)
+        self.params.update(params_dict)
         assert self.params["min_points"]>0
-        
+
     def run(self,file_path):
         from src.methods.neural_network_tools import nntools
         import torch
@@ -45,7 +53,7 @@ class NNClass():
         os.makedirs(os.path.join(self.folpath,"frames"))
         os.makedirs(os.path.join(self.folpath,"masks"))
         os.makedirs(os.path.join(self.folpath,"log"))
-        
+
         self.state=["Making Files",0]
         T,N_points,C,W,H,D=self.data_info["T"],self.data_info["N_points"],self.data_info["C"],self.data_info["W"],self.data_info["H"],self.data_info["D"]
         points=self.dataset.get_points()
@@ -56,7 +64,7 @@ class NNClass():
         n_channels=len(channels)
         grid=np.stack(np.meshgrid(np.arange(W),np.arange(H),np.arange(D),indexing="ij"),axis=0)
         gridpts=grid.reshape(3,-1).T
-        
+
         #don't think about non existing points
         existing=np.any(~np.isnan(points[:,:,0]),axis=0)
         existing[0]=1#for background
@@ -64,7 +72,7 @@ class NNClass():
         N_labels=len(labels_to_inds)
         inds_to_labels=np.zeros(N_points+1)
         inds_to_labels[labels_to_inds]=np.arange(N_labels)
-        
+
         for t in range(1,T+1):
             if self.cancel:
                 self.quit()
@@ -80,9 +88,9 @@ class NNClass():
                 mask=torch.tensor(maskpts.reshape(W,H,D),dtype=torch.uint8)
                 torch.save(mask,os.path.join(self.folpath,"masks",str(t-1)+".pt"))
             self.state[1]=int(100*t/T)
-            
+
         data=nntools.EvalDataset(folpath=self.folpath,channels=channels,T=T,maxz=True)
-        
+
         if self.params["Targeted"]:
             self.state=["Embedding Posture Space Training",0]
             self.encnet=Networks.AutoEnc2d(sh2d=(W,H),n_channels=n_channels,n_z=min(20,T//2))
@@ -106,7 +114,7 @@ class NNClass():
                     self.state[1]=int(100*(epoch*T+i+1)/(n_epoch*T) )
                     f.write(str(loss.item())+"\n")
             f.close()
-            
+
             self.state=["Embedding Posture Space Evaluating",0]
             self.encnet.eval()
             vecs=[]
@@ -130,13 +138,13 @@ class NNClass():
                 vecs=u_map.fit_transform(vecs)
             distmat=sspat.distance_matrix(vecs,vecs).astype(np.float32)
             self.dataset.set_data("distmat",distmat)
-            plt.imshow(distmat)
-            plt.show()
-        
+        self.state="Done"
+        return
+
         self.state=["Training Network",0]
         self.net=Networks.ThreeDCN(n_channels=n_channels,num_classes=N_labels)
         self.net.to(device=self.device,dtype=torch.float32)
-        
+
         train_data=nntools.TrainDataset(folpath=self.folpath,channels=channels,shape=(C,W,H,D))
         loader=torch.utils.data.DataLoader(train_data, batch_size=batch_size,shuffle=True, num_workers=num_workers,pin_memory=True)
         opt=torch.optim.Adam(self.net.parameters(),lr=self.params["lr"])
@@ -154,7 +162,7 @@ class NNClass():
                 opt.step()
                 self.state[1]=int(100*(epoch*T+i+1)/(n_epoch*T) )
                 print(self.state)
-        
+
         if self.params["Targeted"]:
             self.state=["Making Targeted Augmentation",0]
             for t in range(1,T+1):
@@ -163,7 +171,7 @@ class NNClass():
                     return
                 time.sleep(0.001)
                 self.state[1]=int(100*t/T)
-                
+
             self.state=["Re Training Network",0]
             for t in range(1,T+1):
                 if self.cancel:
@@ -171,7 +179,7 @@ class NNClass():
                     return
                 time.sleep(0.001)
                 self.state[1]=int(100*t/T)
-        
+
         self.state=["Extracting Points",0]
         ptss=np.full((T,N+1,3),np.nan)
         with torch.no_grad():
@@ -183,14 +191,14 @@ class NNClass():
                 pts=get_pts(maskpred,grid)
                 ptss[i]=pts
         self.dataset.set_data("helper_NN",ptss,overwrite=True)
-        
+
         self.dataset.close()
         #shutil.rmtree(self.folpath)
         self.state="Done"
-        
+
     def quit(self):
         shutil.rmtree(self.folpath)
-        
+
 
 def NN(command_pipe_sub,file_path,params):
     method=NNClass(params)

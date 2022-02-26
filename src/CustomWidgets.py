@@ -70,7 +70,7 @@ class PointBarWidget(QScrollArea):
                 self.pointbuttons[i_point][0].setStyleSheet("background-color : rgb(243,175,61); border-radius: 4px; min-width: 10px; min-height: 20px")
             elif present==3:
                 self.pointbuttons[i_point][0].setStyleSheet("background-color : rgb(93,177,130); border-radius: 4px; min-width: 10px; min-height: 20px")
-                
+
 class Annotated3DFig(pg.PlotWidget):
     def __init__(self,gui):
         super().__init__()
@@ -92,12 +92,12 @@ class Annotated3DFig(pg.PlotWidget):
 
         self.label=pg.TextItem()
         self.addItem(self.label)
-        
+
         self.scatter=pg.ScatterPlotItem()
         self.scatter_highlight=pg.ScatterPlotItem()
         pw=float(self.gui.settings["pen_width"])
         self.pens_assigned=[pg.mkPen(width=pw, color=color) for color in self.assigned_colors]
-        self.pen_gt=pg.mkPen(width=pw, color=[int(val) for val in self.gui.settings["gt_color"].split(",")]) 
+        self.pen_gt=pg.mkPen(width=pw, color=[int(val) for val in self.gui.settings["gt_color"].split(",")])
         self.pen_helper=pg.mkPen(width=pw, color=[int(val) for val in self.gui.settings["helper_color"].split(",")])
         self.pen_highlight=pg.mkPen(width=pw*3, color=(255,255,255))
         mp=float(self.gui.settings["min_pointsize"])
@@ -106,25 +106,25 @@ class Annotated3DFig(pg.PlotWidget):
         c1=(Mp-mp)/zss
         self.size_func=lambda dz: np.clip(Mp-c1*dz,mp,Mp)
         self.addItem(self.scatter)
-        
+
         self.setAspectLocked()
         self.setMenuEnabled(False)
         self.invertY(False)
         self.hideAxis("bottom")
         self.hideAxis("left")
         self.transposed=False
-        
+
         self.scene().sigMouseMoved.connect(self.mousetracker)
         self.scene().sigMouseClicked.connect(self.mouseclick)
         self.inn=False
         self.mouse_current=None
-        
+
         self.levels=np.repeat(np.array([[0,255]]),self.n_channels,axis=0)[:,:,None,None]
         self.gammas=np.ones(self.n_channels,dtype=np.float32)[:,None,None]
 
     def update_data(self,data):
         z=data["z"]
-                
+
         im=data["image"]
         im=np.divide((im-self.levels[:,0]),(self.levels[:,1]-self.levels[:,0]),
             where=self.levels[:,1]>self.levels[:,0],out=np.zeros_like(im,dtype=np.float32))
@@ -136,7 +136,7 @@ class Annotated3DFig(pg.PlotWidget):
         else:
             im=im.transpose(1,2,0)@self.channel_colors
         self.image.setImage(im[:,:,:],autoLevels=False,levels=[0,255])
-        
+
         points=data["points"]
         valid=~np.isnan(points[:,0])
         if np.sum(valid)==0:
@@ -162,7 +162,7 @@ class Annotated3DFig(pg.PlotWidget):
         self.label.setText(data["label"])
         self.plotItem.vb.disableAutoRange()
 
-    
+
     def update_params(self,arg):
         code,val=arg
         key,channel=code.split("_")
@@ -179,18 +179,18 @@ class Annotated3DFig(pg.PlotWidget):
             self.channel_colors[channel-1,1]=val
         elif key=="b":
             self.channel_colors[channel-1,2]=val
-            
+
     def enterEvent(self,event):
         self.setFocus()
         self.inn=True
 
     def leaveEvent(self,event):
         self.inn=False
-        
+
     def mousetracker(self,event):
         if self.inn:
             self.mouse_current=event
-    
+
     def mouseclick(self,event):
         if self.inn:
             pos=self.plotItem.vb.mapSceneToView(event.scenePos())
@@ -198,10 +198,10 @@ class Annotated3DFig(pg.PlotWidget):
                 self.gui.respond("fig_click",[event.button(),pos.y()-0.5,pos.x()-0.5])
             else:
                 self.gui.respond("fig_click",[event.button(),pos.x()-0.5,pos.y()-0.5])
-    
+
     def wheelEvent(self,event):
         self.gui.respond("fig_scroll",event.angleDelta().y())
-        
+
     def keyPressEvent(self, event):
         key=event.key()
         if key==Qt.Key_Space:
@@ -213,11 +213,11 @@ class Annotated3DFig(pg.PlotWidget):
                     self.gui.respond("fig_keypress",[event.text(),pos.y()-0.5,pos.x()-0.5])
                 else:
                     self.gui.respond("fig_keypress",[event.text(),pos.x()-0.5,pos.y()-0.5])
-                    
+
     def set_transpose(self,val):
         self.transposed=val
-        self.enableAutoRange()         
-        
+        self.enableAutoRange()
+
 class AnnotateTab(QWidget):
     def __init__(self,gui):
         super().__init__()
@@ -225,12 +225,12 @@ class AnnotateTab(QWidget):
         T=self.gui.data_info["T"]
         self.grid=QGridLayout()
         n_cols=3
-        
+
         row=0
         self.label=QLabel("Selected: None")
         self.grid.addWidget(self.label,row,0,1,n_cols)
         row+=1
-        
+
         self.helper_select=QComboBox()
         self.helper_names=[""]+self.gui.dataset.get_helper_names()
         for name in self.helper_names:
@@ -239,12 +239,12 @@ class AnnotateTab(QWidget):
         self.helper_select.currentIndexChanged.connect(lambda x:self.gui.respond("load_helper",self.helper_names[x]))
         self.grid.addWidget(self.helper_select,row,0,1,n_cols)
         row+=1
-        
+
         self.grid.addWidget(QLabel("Action"),row,0,1,1)
         self.grid.addWidget(QLabel("Tmin"),row,1,1,1)
         self.grid.addWidget(QLabel("Tmax"),row,2,1,1)
         row+=1
-        
+
         self.approve_button=QPushButton("Approve Helper")
         self.approve_button.setStyleSheet("background-color : rgb(93,177,130); border-radius: 4px; min-height: 20px")
         self.approve_button.setEnabled(False)
@@ -257,7 +257,7 @@ class AnnotateTab(QWidget):
         self.amax.setValidator(QtGui.QIntValidator(1,T))
         self.grid.addWidget(self.amax,row,2,1,1)
         row+=1
-        
+
         self.extend_button=QPushButton("Linear Interpolate GT")
         self.extend_button.setStyleSheet("background-color : rgb(243,175,61); border-radius: 4px; min-height: 20px")
         self.extend_button.setEnabled(False)
@@ -270,7 +270,7 @@ class AnnotateTab(QWidget):
         self.emax.setValidator(QtGui.QIntValidator(1,T))
         self.grid.addWidget(self.emax,row,2,1,1)
         row+=1
-        
+
         self.delete_button=QPushButton("Delete GT")
         self.delete_button.setStyleSheet("background-color : rgb(236,98,64); border-radius: 4px; min-height: 20px")
         self.delete_button.setEnabled(False)
@@ -283,19 +283,19 @@ class AnnotateTab(QWidget):
         self.dmax.setValidator(QtGui.QIntValidator(1,T))
         self.grid.addWidget(self.dmax,row,2,1,1)
         row+=1
-        
+
         follow_checkbox=QCheckBox("Follow Highlighted")
         follow_checkbox.stateChanged.connect(self.follow_clicked)
         self.grid.addWidget(follow_checkbox,row,0,1,n_cols)
-        
+
         self.setLayout(self.grid)
-    
+
     def follow_clicked(self,state):
         if state == QtCore.Qt.Checked:
             self.gui.respond("follow",True)
         else:
             self.gui.respond("follow",False)
-            
+
     def highlight(self,i_point_highlight):
         if i_point_highlight!=0:
             self.label.setText("Selected: "+str(i_point_highlight))
@@ -307,7 +307,7 @@ class AnnotateTab(QWidget):
             self.approve_button.setEnabled(False)
             self.extend_button.setEnabled(False)
             self.delete_button.setEnabled(False)
-        
+
     def make_annotate_signal_func(self,code):
         def annotate_signal_func():
             if code=="approve":
@@ -323,10 +323,10 @@ class AnnotateTab(QWidget):
                 #print("Range invalid")
             self.gui.respond(code,mM)
         return annotate_signal_func
-        
+
     def get_current_helper_name(self):
         return self.helper_names[self.helper_select.currentIndex()]
-    
+
     def renew_helper_list(self):
         self.helper_select.currentIndexChanged.disconnect()
         self.helper_select.clear()
@@ -335,7 +335,7 @@ class AnnotateTab(QWidget):
             self.helper_select.addItem(name)
         self.helper_select.setCurrentIndex(0)
         self.helper_select.currentIndexChanged.connect(lambda x:self.gui.respond("load_helper",self.helper_names[x]))
-        
+
 class ViewTab(QWidget):
     def __init__(self,gui):
         super().__init__()
@@ -347,13 +347,13 @@ class ViewTab(QWidget):
         if n_channels>channel_colors.shape[0]:
             channel_colors=np.concatenate([channel_colors,np.full((n_channels-channel_colors.shape[0],3),0)],axis=0)
         max_100gamma=int(float(self.gui.settings["max_gamma"])*100)
-        
+
         row=0
         self.transpose=QCheckBox("Transpose")
         self.transpose.toggled.connect(lambda x:self.gui.respond("transpose",x))
         self.grid.addWidget(self.transpose,row,0,1,3*n_channels)
         row+=1
-        
+
         for i_channel in range(1,n_channels+1):
             c=channel_colors[i_channel-1]
             if True:
@@ -361,7 +361,7 @@ class ViewTab(QWidget):
                 label=QLabel("Channel "+str(i_channel))
                 self.grid.addWidget(label,subrow,3*(i_channel-1),1,3)
                 subrow+=1
-                
+
                 label=QLabel("Min")
                 self.grid.addWidget(label,subrow,3*(i_channel-1),1,3)
                 subrow+=1
@@ -372,7 +372,7 @@ class ViewTab(QWidget):
                 min_slider.valueChanged.connect(self.make_slider_change_func("min_"+str(i_channel)))
                 self.grid.addWidget(min_slider,subrow,3*(i_channel-1),1,3)
                 subrow+=1
-                
+
                 label=QLabel("Max")
                 self.grid.addWidget(label,subrow,3*(i_channel-1),1,3)
                 subrow+=1
@@ -383,7 +383,7 @@ class ViewTab(QWidget):
                 max_slider.valueChanged.connect(self.make_slider_change_func("max_"+str(i_channel)))
                 self.grid.addWidget(max_slider,subrow,3*(i_channel-1),1,3)
                 subrow+=1
-                
+
                 label=QLabel("Gamma")
                 self.grid.addWidget(label,subrow,3*(i_channel-1),1,3)
                 subrow+=1
@@ -394,7 +394,7 @@ class ViewTab(QWidget):
                 gamma_slider.valueChanged.connect(self.make_slider_change_func("gamma_"+str(i_channel)))
                 self.grid.addWidget(gamma_slider,subrow,3*(i_channel-1),1,3)
                 subrow+=1
-                
+
                 label=QLabel("R")
                 self.grid.addWidget(label,subrow,3*(i_channel-1),1,1)
                 label=QLabel("G")
@@ -402,7 +402,7 @@ class ViewTab(QWidget):
                 label=QLabel("B")
                 self.grid.addWidget(label,subrow,3*(i_channel-1)+2,1,1)
                 subrow+=1
-                
+
                 r_slider=QSlider(Qt.Vertical)
                 r_slider.setMinimum(0)
                 r_slider.setMaximum(255)
@@ -425,7 +425,7 @@ class ViewTab(QWidget):
                 self.grid.addWidget(b_slider,subrow,3*(i_channel-1)+2,1,1)
                 subrow+=1
         self.setLayout(self.grid)
-    
+
     def make_slider_change_func(self,code):
         def slider_change_func(val):
             self.gui.respond("view_change",[code,val])
@@ -435,9 +435,9 @@ class TrackTab(QWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
-        
+
         self.methods=tracking_methods.methods
-        
+
         row=0
         self.grid=QGridLayout()
         self.combobox=QComboBox()
@@ -448,27 +448,27 @@ class TrackTab(QWidget):
         self.combobox.currentIndexChanged.connect(lambda x: self.run_button.setEnabled(False) if x==0 else self.run_button.setEnabled(True))
         self.grid.addWidget(self.combobox,row,0)
         row+=1
-        
+
         self.param_edit=QLineEdit()
         self.grid.addWidget(self.param_edit,row,0)
         row+=1
-        
+
         self.run_button=QPushButton("Run")
         self.run_button.setStyleSheet("background-color : rgb(93,177,130); border-radius: 4px; min-height: 20px")
         self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self.make_run_function())
         self.grid.addWidget(self.run_button,row,0)
         row+=1
-        
+
         self.setLayout(self.grid)
-    
+
     def make_run_function(self):
         def run_function():
             name=str(self.combobox.currentText())
             params=self.param_edit.text()
             self.run(name,params)
         return run_function
-    
+
     def run(self,method_name,params):
         msgbox=QMessageBox()
         msgbox.setText("Confirm Run")
@@ -480,7 +480,7 @@ class TrackTab(QWidget):
         self.gui.respond("save")
         self.gui.respond("timer_stop")
         self.gui.dataset.close()
-        
+
         progress=QProgressDialog("","cancel",-1,101)
         labeltext="Running "+method_name+((" with "+params) if params!="" else "") +":\n"
         progress.setLabelText(labeltext)
@@ -521,9 +521,9 @@ class AnalysisTab(QWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
-        
+
         self.methods=analysis_methods.methods
-        
+
         row=0
         self.grid=QGridLayout()
         self.combobox=QComboBox()
@@ -534,18 +534,18 @@ class AnalysisTab(QWidget):
         self.combobox.currentIndexChanged.connect(lambda x: self.run_button.setEnabled(False) if x==0 else self.run_button.setEnabled(True))
         self.grid.addWidget(self.combobox,row,0)
         row+=1
-        
+
         self.param_edit=QLineEdit()
         self.grid.addWidget(self.param_edit,row,0)
         row+=1
-        
+
         self.run_button=QPushButton("Run")
         self.run_button.setStyleSheet("background-color : rgb(93,177,130); border-radius: 4px; min-height: 20px")
         self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self.make_run_function())
         self.grid.addWidget(self.run_button,row,0)
         row+=1
-        
+
         self.signal_select=QComboBox()
         self.signal_names=[""]+self.gui.dataset.get_signal_names()
         for name in self.signal_names:
@@ -554,16 +554,16 @@ class AnalysisTab(QWidget):
         self.signal_select.currentIndexChanged.connect(lambda x:self.gui.respond("load_signal",self.signal_names[x]))
         self.grid.addWidget(self.signal_select,row,0)
         row+=1
-        
+
         self.setLayout(self.grid)
-    
+
     def make_run_function(self):
         def run_function():
             name=str(self.combobox.currentText())
             params=self.param_edit.text()
             self.run(name,params)
         return run_function
-        
+
     def run(self,method_name,params):
         msgbox=QMessageBox()
         msgbox.setText("Confirm Run")
@@ -575,7 +575,7 @@ class AnalysisTab(QWidget):
         self.gui.respond("save")
         self.gui.respond("timer_stop")
         self.gui.dataset.close()
-        
+
         progress=QProgressDialog("","cancel",-1,101)
         labeltext="Running "+method_name+((" with "+params) if params!="" else "") +":\n"
         progress.setLabelText(labeltext)
@@ -584,7 +584,7 @@ class AnalysisTab(QWidget):
         progress.setWindowModality(Qt.WindowModal)
         progress.setValue(-1)
         QApplication.processEvents()
-        
+
         command_pipe_main,command_pipe_sub=Pipe()
         process = Process(target=self.methods[method_name], args=(command_pipe_sub,self.gui.dataset.file_path,params))
         process.start()
@@ -605,12 +605,12 @@ class AnalysisTab(QWidget):
                     progress.setValue(progress_value)
             QApplication.processEvents()
         process.join()
-        
+
         progress.setValue(101)
         self.gui.dataset.open()
         self.gui.respond("renew_signals")
         self.gui.respond("timer_start")
-        
+
     def renew_signal_list(self):
         self.signal_select.currentIndexChanged.disconnect()
         self.signal_select.clear()
@@ -619,7 +619,7 @@ class AnalysisTab(QWidget):
             self.signal_select.addItem(name)
         self.signal_select.setCurrentIndex(0)
         self.signal_select.currentIndexChanged.connect(lambda x:self.gui.respond("load_signal",self.signal_names[x]))
-        
+
 class DashboardTab(QWidget):
     def __init__(self,gui):
         super().__init__()
@@ -648,16 +648,16 @@ class DashboardTab(QWidget):
                 button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")
                 row.append(button)
                 self.grid.addWidget(button,i,j+1)
-            self.buttonss.append(row)        
+            self.buttonss.append(row)
         self.current_label_button=self.time_label_buttons[0]
         self.current_label_button.setStyleSheet("background-color : rgb(42,99,246); border-radius: 4px;")
         self.scrollwidget.setLayout(self.grid)
-        
+
         self.scrollarea.setWidget(self.scrollwidget)
         self.scrollarea.setMinimumWidth(self.scrollarea.sizeHint().width()+self.scrollarea.verticalScrollBar().sizeHint().width())
         self.scrollarea.horizontalScrollBar().setEnabled(False)
         self.scrollarea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
+
         maingrid=QGridLayout()
         topscrollarea=QScrollArea()
         topscrollarea.setFixedHeight(40)
@@ -683,23 +683,23 @@ class DashboardTab(QWidget):
         maingrid.addWidget(topscrollarea,0,0)
         maingrid.addWidget(self.scrollarea,1,0)
         self.setLayout(maingrid)
-    
+
     def make_button_press_function_t(self,i):
         def button_press_function():
             self.gui.respond("time_change",np.clip(self.chunksize*self.chunknumber+i+1,1,self.T))
         return button_press_function
-        
+
     def make_button_press_function_h(self,j):
         def button_press_function():
             self.gui.respond("khighlight",j)
         return button_press_function
-        
+
     def make_button_press_function_th(self,i,j):
         def button_press_function():
             self.gui.respond("time_change",np.clip(self.chunksize*self.chunknumber+i+1,1,self.T))
             self.gui.respond("khighlight",j)
         return button_press_function
-    
+
     def update_time(self):
         t=self.gui.time
         chunknumber=(t-1)//self.chunksize
@@ -713,7 +713,7 @@ class DashboardTab(QWidget):
         self.current_label_button=self.time_label_buttons[(t-1)%self.chunksize]
         self.scrollarea.ensureWidgetVisible(self.current_label_button)
         self.current_label_button.setStyleSheet("background-color : rgb(42,99,246); border-radius: 4px;")
-    
+
     def recolor(self,presence):
         chunknumber=(self.gui.time-1)//self.chunksize
         Ti=chunknumber*self.chunksize
@@ -726,7 +726,7 @@ class DashboardTab(QWidget):
                 subpresence[:,i]=-1
             else:
                 subpresence[:,i]=presence[Ti:Tf,i_point]%2#0,2 for absences
-                
+
         row=0
         for buttons in self.buttonss:
             if row==Tlen:
@@ -740,26 +740,26 @@ class DashboardTab(QWidget):
                 else:
                     button.setStyleSheet("background-color : rgb(42,99,246); border-radius: 4px;")
             row+=1
-            
+
         for i in range(row,self.chunksize):
             for button in self.buttonss[i]:
-                button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")    
-        
+                button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")
+
 class PlotsTab(QTabWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
         self.T=self.gui.data_info["T"]
-        
+
         self.plot=Plot(self.gui)
         self.plot.setLabel("bottom","Time")
         self.set_axis_labels([])
         self.line=self.plot.addLine(x=1)
         self.t_vals=np.arange(1,self.T+1)
-        
+
         self.addTab(self.plot,"Plot")
         self.tabBar().setTabTextColor(0,QtGui.QColor(0,0,0))
-        
+
         self.choosergrid=QGridLayout()
         self.chooser = QListView()
         self.model = QtGui.QStandardItemModel()
@@ -775,17 +775,17 @@ class PlotsTab(QTabWidget):
         self.plotbutton.clicked.connect(self.update_plot)
         self.choosergrid.addWidget(self.plotbutton,1,0)
         self.choosergrid.setRowStretch(1,1)
-        
+
         widget=QWidget()
         widget.setLayout(self.choosergrid)
         self.addTab(widget,"Choose Series")
         self.tabBar().setTabTextColor(1,QtGui.QColor(0,0,0))
-    
+
     def set_axis_labels(self,names):
         stringaxis = pg.AxisItem(orientation='left')
         stringaxis.setTicks( [dict(zip(np.arange(len(names))+0.5,names)).items()] )
         self.plot.setAxisItems(axisItems = {'left': stringaxis})
-    
+
     def normalize_series(self,series):
         valid=~np.isnan(series)
         if valid.sum()<2:
@@ -796,7 +796,7 @@ class PlotsTab(QTabWidget):
                 return None
             series=(series-m)/(M-m)
             return series
-    
+
     def update_plot(self):
         seriess={}
         series_labels=self.gui.dataset.get_series_labels()
@@ -821,7 +821,7 @@ class PlotsTab(QTabWidget):
                 self.plot.plot(x=self.t_vals,y=series+base,pen=pg.mkPen(width=1, color=(0,255,0)))
             base+=1
         self.plot.enableAutoRange()
-        
+
     def update_time(self):
         t=self.gui.time
         self.line.setValue(t)
@@ -835,24 +835,27 @@ class MinimapTab(pg.PlotWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
-        
+
 class UtilityBar(QWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
         self.grid=QGridLayout()
-        
+
         save_button=QPushButton("Save")
         save_button.setStyleSheet("background-color : rgb(93,177,130); border-radius: 4px; min-width: 40px; min-height: 20px")
         save_button.clicked.connect(lambda:self.gui.respond("save"))
-        
+
         label_file=QLabel("File: "+self.gui.dataset.file_path)
         if "description" in self.gui.data_info.keys():
             description="Description: "+self.gui.data_info["description"]
         else:
             description="Description: "
+        description+=" (T,C,W,H,D)=("+str(self.gui.data_info["T"])+","
+        description+=str(self.gui.data_info["C"])+","+str(self.gui.data_info["W"])+","
+        description+=str(self.gui.data_info["H"])+","+str(self.gui.data_info["D"])+")"
         label_description=QLabel(description)
-        
+
         self.grid.addWidget(save_button,0,0)
         self.grid.addWidget(label_file,0,1)
         self.grid.addWidget(label_description,0,2)
@@ -986,14 +989,14 @@ class TimeSliderWidget(LabeledSlider):
             self.sl.blockSignals(True)
             self.sl.setValue(t)
             self.sl.blockSignals(False)
-            
+
 class GoToTimeWidget(QWidget):
     def __init__(self,gui):
         super().__init__()
         self.gui=gui
         self.grid=QGridLayout()
         T=self.gui.data_info["T"]
-        
+
         self.goto_button=QPushButton("Go To Time:")
         self.goto_button.setStyleSheet("background-color : rgb(93,177,130); border-radius: 4px; min-height: 20px")
         self.goto_button.clicked.connect(self.make_gototime_function())
@@ -1002,7 +1005,7 @@ class GoToTimeWidget(QWidget):
         self.tedit.setValidator(QtGui.QIntValidator(1,T))
         self.grid.addWidget(self.tedit,0,1,1,1)
         self.setLayout(self.grid)
-        
+
     def make_gototime_function(self):
         def gototime_function():
             t=self.tedit.text()
@@ -1013,5 +1016,3 @@ class GoToTimeWidget(QWidget):
                 pass
                 #print(ex)
         return gototime_function
-
-        
