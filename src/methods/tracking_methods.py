@@ -15,6 +15,14 @@ import matplotlib.pyplot as plt
 
 class NNClass():
     def __init__(self,params):
+        params_dict={}
+        try:
+            if params!="":
+                for eq in params.split(";"):
+                    key,val=eq.split("=")
+                    params_dict[key]=eval(val)
+        except:
+            print("param parse failed")
         self.state=""
         self.cancel=False
         
@@ -38,7 +46,7 @@ class NNClass():
         if self.params["2D"]:
             assert not self.params["Targeted"], "Targeted Augementation only in 3D"
         assert self.params["min_points"]>0
-        
+
     def run(self,file_path):
         from src.methods.neural_network_tools import nntools
         import torch
@@ -52,14 +60,14 @@ class NNClass():
         folname=file.split(".")[0]
         self.folpath=os.path.join("data","data_temp",folname)
         if os.path.exists(self.folpath):
-            #shutil.rmtree(self.folpath)
+            shutil.rmtree(self.folpath)
             pass
-        #os.makedirs(self.folpath)
+        os.makedirs(self.folpath)
         self.dataset.open()
         self.data_info=self.dataset.get_data_info()
-        #os.makedirs(os.path.join(self.folpath,"frames"))
-        #os.makedirs(os.path.join(self.folpath,"masks"))
-        #os.makedirs(os.path.join(self.folpath,"log"))
+        os.makedirs(os.path.join(self.folpath,"frames"))
+        os.makedirs(os.path.join(self.folpath,"masks"))
+        os.makedirs(os.path.join(self.folpath,"log"))
         
         if self.params["2D"]:
             assert self.data_info["D"]==1,"Input not 2D"
@@ -74,7 +82,7 @@ class NNClass():
         n_channels=len(channels)
         grid=np.stack(np.meshgrid(np.arange(W),np.arange(H),np.arange(D),indexing="ij"),axis=0)
         gridpts=grid.reshape(3,-1).T
-        
+
         #don't think about non existing points
         existing=np.any(~np.isnan(points[:,:,0]),axis=0)
         existing[0]=1#for background
@@ -82,7 +90,6 @@ class NNClass():
         N_labels=len(labels_to_inds)
         inds_to_labels=np.zeros(N_points+1)
         inds_to_labels[labels_to_inds]=np.arange(N_labels)
-        """
         for t in range(1,T+1):
             if self.cancel:
                 self.quit()
@@ -98,7 +105,6 @@ class NNClass():
                 mask=torch.tensor(maskpts.reshape(W,H,D),dtype=torch.uint8)
                 torch.save(mask,os.path.join(self.folpath,"masks",str(t-1)+".pt"))
             self.state[1]=int(100*t/T)
-        """
         
         if self.params["Targeted"]:
             self.state=["Embedding Posture Space Training",0]
@@ -125,7 +131,7 @@ class NNClass():
                     self.state[1]=int(100*(epoch*T+i+1)/(n_epoch*T) )
                     f.write(str(loss.item())+"\n")
             f.close()
-            
+
             self.state=["Embedding Posture Space Evaluating",0]
             self.encnet.eval()
             vecs=[]
@@ -158,7 +164,7 @@ class NNClass():
         else:
             self.net=Networks.ThreeDCN(n_channels=n_channels,num_classes=N_labels)
         self.net.to(device=self.device,dtype=torch.float32)
-        
+
         train_data=nntools.TrainDataset(folpath=self.folpath,channels=channels,shape=(C,W,H,D))
         print("tdl",len(train_data))
         loader=torch.utils.data.DataLoader(train_data, batch_size=self.params["batch_size"],shuffle=True, num_workers=4,pin_memory=True)
@@ -210,7 +216,7 @@ class NNClass():
                     return
                 time.sleep(0.001)
                 self.state[1]=int(100*t/T)
-        
+
         self.state=["Extracting Points",0]
         ptss=np.full((T,N_points+1,3),np.nan)
         if self.params["2D"]:
@@ -249,12 +255,11 @@ class NNClass():
         
         self.dataset.set_data("helper_NN",ptss,overwrite=True)
         self.dataset.close()
-        #shutil.rmtree(self.folpath)
+        shutil.rmtree(self.folpath)
         self.state="Done"
-        
+
     def quit(self):
-        pass
-        #shutil.rmtree(self.folpath)
+        shutil.rmtree(self.folpath)
         
 
 def NN(command_pipe_sub,file_path,params):

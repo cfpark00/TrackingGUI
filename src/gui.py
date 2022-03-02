@@ -16,7 +16,7 @@ class GUI():
     def __init__(self,file_path,settings):
         self.settings=settings
         self.dataset=Dataset(file_path)
-        
+
         self.close=False
         self.assigned_points={}
         self.key_index={}
@@ -40,9 +40,9 @@ class GUI():
         self.Tstr="/"+str(self.T)+" "
         self.D=self.data_info["D"]
         self.Dstr="/"+str(self.D)+" "
-        
+
         self.W,self.H=self.data_info["W"],self.data_info["H"]
-        
+
         self.helper=None
         self.signal=None
         self.highlighted=0
@@ -95,16 +95,16 @@ class GUI():
                 nvalids=np.isnan(coords[:,0])
                 coords[nvalids]=self.helper[self.time-1,nvalids]
                 pt_type[nvalids]=-2
-            
+
             for key,index in self.assigned_points.items():
                 if index is not None:
                     pt_type[index]=self.key_index[key]
             pt_type[self.highlighted]=-3
-            
+
             points=np.concatenate([coords,pt_type[:,None]],axis=1)
             self.plotpoints=points
             data["points"]=points
-            
+
             label="Frame: "+str(self.time)+self.Tstr
             label+=" z: "+(str(self.z)+self.Dstr) if self.z>=0 else " z: max "
             dt=time.time()-self.last_update_t
@@ -113,7 +113,7 @@ class GUI():
             data["z"]=self.z
             self.win.figurewidget.update_data(data)
             self.update_presence()
-            self.last_update_t=time.time()            
+            self.last_update_t=time.time()
         elif key=="fig_keypress":
             kkey=val[0]
             if kkey not in self.assigned_points.keys():
@@ -123,7 +123,7 @@ class GUI():
             if self.assigned_points[kkey] is not None:
                 if (-0.5<coord[0]<(self.W-0.5)) and (-0.5<coord[1]<(self.H-0.5)) and (-0.5<coord[2]<(self.D-0.5)):
                     i_point=self.assigned_points[kkey]
-                    self.points[self.time-1,i_point]=coord       
+                    self.points[self.time-1,i_point]=coord
         elif key=="fig_click":
             if val[0]==1:
                 coords=self.plotpoints[:,:3]
@@ -136,7 +136,7 @@ class GUI():
                 if dists[am]<self.click_distance:
                     self.respond("highlight",indices[am])
             else:
-                print("right click, no function")
+                print("coord:",val[1],val[2],self.z)
         elif key=="fig_scroll":
             dz=val/self.scroll_per_z
             self.z_float=np.clip(self.z_float+dz,-1.5,self.D-0.5)
@@ -216,7 +216,7 @@ class GUI():
             self.win.figurewidget.set_transpose(val)
         else:
             print(key,val)
-        
+
     def update_time(self):
         if self.follow:
             if self.highlighted!=0:
@@ -239,10 +239,10 @@ class GUI():
         self.win.pointbarwidget.recolor(presence[self.time-1])
         self.win.dashboard_tab.recolor(presence)
         self.win.annotate_tab.highlight(self.highlighted)
-        
+
     def update_z(self):
         self.z=np.clip(int(self.z_float+0.5),-1,self.D-1)
-    
+
     def update_assigned(self):
         self.win.pointbarwidget.update_assigned()
         self.win.plots_tab.update_plot()
@@ -307,7 +307,7 @@ class Window(QMainWindow):
                         self.controlstab.tabBar().setTabTextColor(2,QtGui.QColor(0,0,0))
                         self.controlstab.addTab(self.analysis_tab,"Analysis")
                         self.controlstab.tabBar().setTabTextColor(3,QtGui.QColor(0,0,0))
-                        
+
                     self.gototimewidget=GoToTimeWidget(self.gui)
                     rightgrid.addWidget(self.plotstab,0,0)
                     rightgrid.addWidget(self.controlstab,1,0)
@@ -347,6 +347,3 @@ class Window(QMainWindow):
             event.accept()
         else:
             event.ignore()
-
-
-

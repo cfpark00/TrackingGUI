@@ -36,7 +36,7 @@ class GaussianIntegralClass():
     def run(self,file_path):
         dataset=Dataset(file_path)
         dataset.open()
-        
+
         points=dataset.get_points()
         self.data_info=dataset.get_data_info()
         self.C=self.data_info["C"]
@@ -64,7 +64,7 @@ class GaussianIntegralClass():
             dataset.set_data("signal_GaussianIntegral",intensities[:,:,0],overwrite=True)
         dataset.close()
         self.state="Done"
-    
+
     def get_valids(self,locs):
         nonan=~np.isnan(locs[:,0])
         locs=np.nan_to_num(locs)
@@ -72,7 +72,7 @@ class GaussianIntegralClass():
         iny=(self.ym<locs[:,1])*(locs[:,1]<self.yM)
         inz=(self.zm<locs[:,2])*(locs[:,2]<self.zM)
         return nonan*inx*iny*inz
-    
+
     def get_values(self,locs,image):
         valids=self.get_valids(locs)
         result=np.full((len(locs),self.C),np.nan)
