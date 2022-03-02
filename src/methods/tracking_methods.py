@@ -17,12 +17,26 @@ class NNClass():
     def __init__(self,params):
         self.state=""
         self.cancel=False
-        self.params={"min_points":1,"channels":None,"mask_radius":4,
+        
+        params_dict={}
+        try:
+            for txt in params.strip().split(";"):
+                if txt=="":
+                    continue
+                key,val=txt.split("=")
+                params_dict[key]=eval(val)
+        except:
+            assert False, "Parameter Parse Failure"   
+        self.params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,
         "lr":0.01,
-        "n_epoch":300,"batch_size":3,"augment":{0:"comp_cut",100:"aff_cut",200:"aff"},
-        "Targeted":False,"n_epoch_posture":5,"batch_size_posture":16,"umap_dim":None,
+        "n_steps":1000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
+        "Targeted":False,"n_epoch_posture":10,"batch_size_posture":16,"umap_dim":None,
+        "weight_channel":None,
         }
-        self.params.update(params)
+        self.params.update(params_dict)
+        
+        if self.params["2D"]:
+            assert not self.params["Targeted"], "Targeted Augementation only in 3D"
         assert self.params["min_points"]>0
         
     def run(self,file_path):
@@ -38,13 +52,17 @@ class NNClass():
         folname=file.split(".")[0]
         self.folpath=os.path.join("data","data_temp",folname)
         if os.path.exists(self.folpath):
-            shutil.rmtree(self.folpath)
-        os.makedirs(self.folpath)
+            #shutil.rmtree(self.folpath)
+            pass
+        #os.makedirs(self.folpath)
         self.dataset.open()
         self.data_info=self.dataset.get_data_info()
-        os.makedirs(os.path.join(self.folpath,"frames"))
-        os.makedirs(os.path.join(self.folpath,"masks"))
-        os.makedirs(os.path.join(self.folpath,"log"))
+        #os.makedirs(os.path.join(self.folpath,"frames"))
+        #os.makedirs(os.path.join(self.folpath,"masks"))
+        #os.makedirs(os.path.join(self.folpath,"log"))
+        
+        if self.params["2D"]:
+            assert self.data_info["D"]==1,"Input not 2D"
         
         self.state=["Making Files",0]
         T,N_points,C,W,H,D=self.data_info["T"],self.data_info["N_points"],self.data_info["C"],self.data_info["W"],self.data_info["H"],self.data_info["D"]
@@ -64,7 +82,7 @@ class NNClass():
         N_labels=len(labels_to_inds)
         inds_to_labels=np.zeros(N_points+1)
         inds_to_labels[labels_to_inds]=np.arange(N_labels)
-        
+        """
         for t in range(1,T+1):
             if self.cancel:
                 self.quit()
@@ -80,14 +98,15 @@ class NNClass():
                 mask=torch.tensor(maskpts.reshape(W,H,D),dtype=torch.uint8)
                 torch.save(mask,os.path.join(self.folpath,"masks",str(t-1)+".pt"))
             self.state[1]=int(100*t/T)
-            
-        data=nntools.EvalDataset(folpath=self.folpath,channels=channels,T=T,maxz=True)
+        """
         
         if self.params["Targeted"]:
             self.state=["Embedding Posture Space Training",0]
             self.encnet=Networks.AutoEnc2d(sh2d=(W,H),n_channels=n_channels,n_z=min(20,T//2))
             self.encnet.to(device=self.device,dtype=torch.float32)
             self.encnet.train()
+            
+            data=nntools.EvalDataset(folpath=self.folpath,channels=channels,T=T,maxz=True)
             loader=torch.utils.data.DataLoader(data, batch_size=self.params["batch_size_posture"],shuffle=True,num_workers=4,pin_memory=True)
             opt=torch.optim.Adam(self.encnet.parameters(),lr=self.params["lr"])
             n_epoch=self.params["n_epoch_posture"]
@@ -130,32 +149,51 @@ class NNClass():
                 vecs=u_map.fit_transform(vecs)
             distmat=sspat.distance_matrix(vecs,vecs).astype(np.float32)
             self.dataset.set_data("distmat",distmat)
-            plt.imshow(distmat)
-            plt.show()
+            #plt.imshow(distmat)
+            #plt.show()
         
         self.state=["Training Network",0]
-        self.net=Networks.ThreeDCN(n_channels=n_channels,num_classes=N_labels)
+        if self.params["2D"]:
+            self.net=Networks.TwoDCN(n_channels=n_channels,num_classes=N_labels)
+        else:
+            self.net=Networks.ThreeDCN(n_channels=n_channels,num_classes=N_labels)
         self.net.to(device=self.device,dtype=torch.float32)
         
         train_data=nntools.TrainDataset(folpath=self.folpath,channels=channels,shape=(C,W,H,D))
-        loader=torch.utils.data.DataLoader(train_data, batch_size=batch_size,shuffle=True, num_workers=num_workers,pin_memory=True)
+        print("tdl",len(train_data))
+        loader=torch.utils.data.DataLoader(train_data, batch_size=self.params["batch_size"],shuffle=True, num_workers=4,pin_memory=True)
+        n_batches=len(loader)
         opt=torch.optim.Adam(self.net.parameters(),lr=self.params["lr"])
-        n_epoch=self.params["n_epoch"]
-        for epoch in range(n_epoch):
+        n_steps=self.params["n_steps"]
+        
+        self.net.train()
+        traindone=False
+        stepcount=0
+        while not traindone:
+            if stepcount in self.params["augment"].keys():
+                train_data.change_augment(self.params["augment"][stepcount])
             for i,(ims,masks) in enumerate(loader):
                 if self.cancel:
                     self.quit()
                     return
+                if self.params["2D"]:
+                    ims=ims[:,:,:,:,0]
+                    masks=masks[:,:,:,0]
                 ims=ims.to(device=self.device,dtype=torch.float32)
-                res,latent=self.encnet(ims)
-                loss=torch.nn.functional.mse_loss(res,ims)
+                masks=masks.to(device=self.device,dtype=torch.long)
+                res=self.net(ims)
+                loss=nntools.selective_ce(res,masks)
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
-                self.state[1]=int(100*(epoch*T+i+1)/(n_epoch*T) )
-                print(self.state)
+                stepcount+=1
+                self.state[1]=int(100*(stepcount/n_steps))
+                if stepcount==n_steps:
+                    traindone=True 
+                    break
         
         if self.params["Targeted"]:
+            self.net.eval()
             self.state=["Making Targeted Augmentation",0]
             for t in range(1,T+1):
                 if self.cancel:
@@ -163,7 +201,8 @@ class NNClass():
                     return
                 time.sleep(0.001)
                 self.state[1]=int(100*t/T)
-                
+            
+            self.net.train()
             self.state=["Re Training Network",0]
             for t in range(1,T+1):
                 if self.cancel:
@@ -173,23 +212,49 @@ class NNClass():
                 self.state[1]=int(100*t/T)
         
         self.state=["Extracting Points",0]
-        ptss=np.full((T,N+1,3),np.nan)
+        ptss=np.full((T,N_points+1,3),np.nan)
+        if self.params["2D"]:
+            ptss[:,1:,2]=0
+            grid=grid[:2,:,:,0]
+            if self.params["weight_channel"] is None:
+                weight=np.ones(grid.shape[1:])
+        data=nntools.EvalDataset(folpath=self.folpath,channels=channels,T=T,maxz=False)
+        self.net.eval()
         with torch.no_grad():
             for i in range(T):
                 if self.cancel:
                     self.quit()
                     return
-                maskpred=torch.argmax(self.net(data[i].unsqueeze(0).to(device=self.device,dtype=torch.float32))[0],dim=0)
-                pts=get_pts(maskpred,grid)
-                ptss[i]=pts
-        self.dataset.set_data("helper_NN",ptss,overwrite=True)
+                im=data[i].to(device=self.device,dtype=torch.float32)
+                if self.params["2D"]:
+                    im=im[:,:,:,0]
+                maskpred=torch.argmax(self.net(im.unsqueeze(0))[0],dim=0).cpu().detach().numpy()
+                
+                if self.params["weight_channel"] is None:
+                    pts_dict=nntools.get_pts_dict(maskpred,grid,weight=weight)
+                else:
+                    im=im.cpu().detach().numpy()
+                    pts_dict=nntools.get_pts_dict(maskpred,grid,weight=im[self.params["weight_channel"]])
+                #print(pts_dict)
+                if self.params["2D"]:
+                    for label,coord in pts_dict.items():
+                        ptss[i,label,:2]=coord
+                else:
+                    for label,coord in pts_dict.items():
+                        ptss[i,label]=coord
+                self.state[1]=int(100*((i+1)/T))
+                if i==5:
+                    break
+        ptss[:,0,:]=np.nan
         
+        self.dataset.set_data("helper_NN",ptss,overwrite=True)
         self.dataset.close()
         #shutil.rmtree(self.folpath)
         self.state="Done"
         
     def quit(self):
-        shutil.rmtree(self.folpath)
+        pass
+        #shutil.rmtree(self.folpath)
         
 
 def NN(command_pipe_sub,file_path,params):

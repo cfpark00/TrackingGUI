@@ -5,6 +5,7 @@ import albumentations as A
 from torch.utils.data import Dataset
 import os
 import glob
+import cc3d
 
 class TrainDataset(Dataset):
     def __init__(self,folpath,channels,shape):
@@ -76,7 +77,7 @@ class TrainDataset(Dataset):
             return torch.tensor(fr),torch.tensor(mask)
             
         elif mode=="aff_cut":
-            fr,mask=self.CD_to_end(fr)
+            fr=self.CD_to_end(fr)
             res=self.aff(image=fr,**feed)
             res=self.cut(res,p=0.5)
             fr=self.CD_back(res["image"])
@@ -84,14 +85,14 @@ class TrainDataset(Dataset):
             return torch.tensor(fr),torch.tensor(mask)
             
         elif mode=="comp":
-            fr,mask=self.CD_to_end(fr)
+            fr=self.CD_to_end(fr)
             res=self.comp(image=fr,**feed)
             fr=self.CD_back(res["image"])
             mask=res["mask"]
             return torch.tensor(fr),torch.tensor(mask)
             
         elif mode=="aff":
-            fr,mask=self.CD_to_end(fr)
+            fr=self.CD_to_end(fr)
             res=self.aff(image=fr,**feed)
             fr=self.CD_back(res["image"])
             mask=res["mask"]
@@ -153,4 +154,43 @@ def get_mask(labels,coords,gridpts,radius=4):
     ds,iis=tree.query(gridpts,k=1)
     maskpts=labels[iis]
     return maskpts*(ds<=radius)
+    
+def get_pts_dict(mask,grid,weight=None):
+    dim=len(mask.shape)
+    assert dim==2 or dim==3
+    labels_out,maxlab=cc3d.connected_components(mask, connectivity=4 if dim==2 else 6, return_N=True)
+    
+    labels=[]
+    sizes=[]
+    cache_dict=[]
+    for i in range(1,maxlab+1):
+        one=(labels_out==i)
+        cache_dict.append(one)
+        labels.append(mask[one][0])
+        sizes.append(np.sum(one))
+    args=np.argsort(sizes)[::-1]
+    
+    pts_dict={0:None}
+    if weight is None:
+        weight=np.ones(grid.shape[1:])
+    wgrid=grid*weight[None,...]
+    for i in args:#decending
+        l=labels[i]
+        if l in pts_dict.keys():
+            continue
+        wvec=np.sum(wgrid[:,cache_dict[i]],axis=1)
+        norm=np.sum(weight[cache_dict[i]])
+        if norm==0:
+            continue
+        pts_dict[l]=wvec/norm
+    del pts_dict[0]
+    return pts_dict
 
+def selective_ce(pred_raw,target_mask):
+    existing=torch.unique(target_mask)
+    with torch.no_grad():
+        trf=torch.zeros(torch.max(existing)+1).to(device=pred_raw.device,dtype=torch.long)
+        trf[existing]=torch.arange(0,len(existing)).to(device=pred_raw.device,dtype=torch.long)
+        mask=trf[target_mask]
+        mask.requires_grad=False
+    return torch.nn.functional.cross_entropy(pred_raw[:,existing],mask)
