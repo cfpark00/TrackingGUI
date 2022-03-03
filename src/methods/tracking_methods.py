@@ -260,7 +260,39 @@ class NNClass():
 
     def quit(self):
         shutil.rmtree(self.folpath)
+
+class PeakCPDClass():
+    def __init__(self,params):
+        self.state=""
+        self.cancel=False
         
+        params_dict={}
+        try:
+            for txt in params.strip().split(";"):
+                if txt=="":
+                    continue
+                key,val=txt.split("=")
+                params_dict[key]=eval(val)
+        except:
+            assert False, "Parameter Parse Failure"   
+        self.params={}
+        self.params.update(params_dict)
+
+
+    def run(self,file_path):
+        self.device= torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.state=["Preparing",0]
+        self.dataset=Dataset(file_path)
+        self.dataset.open()
+        self.data_info=self.dataset.get_data_info()
+        
+        
+        self.dataset.close()
+        self.state="Done"
+
+    def quit(self):
+        pass
+
 
 def NN(command_pipe_sub,file_path,params):
     method=NNClass(params)
@@ -278,9 +310,9 @@ def NN(command_pipe_sub,file_path,params):
         elif command=="close":
             thread.join()
             break
-"""
-def TargetNN(methodclass,command_pipe_sub,file_path,params):
-    method=TargetNNClass(params)
+
+def PeakCPD(command_pipe_sub,file_path,params):
+    method=PeakCPDClass(params)
     thread=threading.Thread(target=method.run,args=(file_path,))
     while True:
         command=command_pipe_sub.recv()
@@ -295,8 +327,8 @@ def TargetNN(methodclass,command_pipe_sub,file_path,params):
         elif command=="close":
             thread.join()
             break
-"""
-methods={"NN":NN,}
+            
+methods={"NN":NN,PeakCPD}
 
 
 if __name__=="__main__":
