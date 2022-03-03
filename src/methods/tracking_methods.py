@@ -14,18 +14,16 @@ import scipy.spatial as sspat
 import matplotlib.pyplot as plt
 
 class NNClass():
+    help=str({"min_points":1,"channels":None,"mask_radius":4,"2D":False,
+    "lr":0.01,
+    "n_steps":1000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
+    "Targeted":False,"n_epoch_posture":10,"batch_size_posture":16,"umap_dim":None,
+    "weight_channel":None,
+    })
     def __init__(self,params):
-        params_dict={}
-        try:
-            if params!="":
-                for eq in params.split(";"):
-                    key,val=eq.split("=")
-                    params_dict[key]=eval(val)
-        except:
-            print("param parse failed")
         self.state=""
         self.cancel=False
-        
+
         params_dict={}
         try:
             for txt in params.strip().split(";"):
@@ -34,7 +32,7 @@ class NNClass():
                 key,val=txt.split("=")
                 params_dict[key]=eval(val)
         except:
-            assert False, "Parameter Parse Failure"   
+            assert False, "Parameter Parse Failure"
         self.params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,
         "lr":0.01,
         "n_steps":1000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
@@ -42,7 +40,7 @@ class NNClass():
         "weight_channel":None,
         }
         self.params.update(params_dict)
-        
+
         if self.params["2D"]:
             assert not self.params["Targeted"], "Targeted Augementation only in 3D"
         assert self.params["min_points"]>0
@@ -68,10 +66,10 @@ class NNClass():
         os.makedirs(os.path.join(self.folpath,"frames"))
         os.makedirs(os.path.join(self.folpath,"masks"))
         os.makedirs(os.path.join(self.folpath,"log"))
-        
+
         if self.params["2D"]:
             assert self.data_info["D"]==1,"Input not 2D"
-        
+
         self.state=["Making Files",0]
         T,N_points,C,W,H,D=self.data_info["T"],self.data_info["N_points"],self.data_info["C"],self.data_info["W"],self.data_info["H"],self.data_info["D"]
         points=self.dataset.get_points()
@@ -105,13 +103,13 @@ class NNClass():
                 mask=torch.tensor(maskpts.reshape(W,H,D),dtype=torch.uint8)
                 torch.save(mask,os.path.join(self.folpath,"masks",str(t-1)+".pt"))
             self.state[1]=int(100*t/T)
-        
+
         if self.params["Targeted"]:
             self.state=["Embedding Posture Space Training",0]
             self.encnet=Networks.AutoEnc2d(sh2d=(W,H),n_channels=n_channels,n_z=min(20,T//2))
             self.encnet.to(device=self.device,dtype=torch.float32)
             self.encnet.train()
-            
+
             data=nntools.EvalDataset(folpath=self.folpath,channels=channels,T=T,maxz=True)
             loader=torch.utils.data.DataLoader(data, batch_size=self.params["batch_size_posture"],shuffle=True,num_workers=4,pin_memory=True)
             opt=torch.optim.Adam(self.encnet.parameters(),lr=self.params["lr"])
@@ -157,7 +155,7 @@ class NNClass():
             self.dataset.set_data("distmat",distmat)
             #plt.imshow(distmat)
             #plt.show()
-        
+
         self.state=["Training Network",0]
         if self.params["2D"]:
             self.net=Networks.TwoDCN(n_channels=n_channels,num_classes=N_labels)
@@ -171,10 +169,11 @@ class NNClass():
         n_batches=len(loader)
         opt=torch.optim.Adam(self.net.parameters(),lr=self.params["lr"])
         n_steps=self.params["n_steps"]
-        
+
         self.net.train()
         traindone=False
         stepcount=0
+        f=open(os.path.join(self.folpath,"log","loss.txt"),"w")
         while not traindone:
             if stepcount in self.params["augment"].keys():
                 train_data.change_augment(self.params["augment"][stepcount])
@@ -192,12 +191,16 @@ class NNClass():
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
+
                 stepcount+=1
                 self.state[1]=int(100*(stepcount/n_steps))
+                print(loss.item())
+                f.write(str(stepcount)+str(loss.item())+"\n")
                 if stepcount==n_steps:
-                    traindone=True 
+                    traindone=True
                     break
-        
+        f.close()
+
         if self.params["Targeted"]:
             self.net.eval()
             self.state=["Making Targeted Augmentation",0]
@@ -207,7 +210,7 @@ class NNClass():
                     return
                 time.sleep(0.001)
                 self.state[1]=int(100*t/T)
-            
+
             self.net.train()
             self.state=["Re Training Network",0]
             for t in range(1,T+1):
@@ -235,7 +238,7 @@ class NNClass():
                 if self.params["2D"]:
                     im=im[:,:,:,0]
                 maskpred=torch.argmax(self.net(im.unsqueeze(0))[0],dim=0).cpu().detach().numpy()
-                
+
                 if self.params["weight_channel"] is None:
                     pts_dict=nntools.get_pts_dict(maskpred,grid,weight=weight)
                 else:
@@ -249,18 +252,55 @@ class NNClass():
                     for label,coord in pts_dict.items():
                         ptss[i,label]=coord
                 self.state[1]=int(100*((i+1)/T))
-                if i==5:
-                    break
         ptss[:,0,:]=np.nan
-        
+
         self.dataset.set_data("helper_NN",ptss,overwrite=True)
         self.dataset.close()
         shutil.rmtree(self.folpath)
         self.state="Done"
 
+        #2D=True;augment={0:"aff_cut",500:"aff"};n_steps=1000;weight_channel=0
+
     def quit(self):
         shutil.rmtree(self.folpath)
-        
+
+class BayesianNPSClass():
+    def __init__(self,params):
+        self.state=""
+        self.cancel=False
+
+        params_dict={}
+        try:
+            for txt in params.strip().split(";"):
+                if txt=="":
+                    continue
+                key,val=txt.split("=")
+                params_dict[key]=eval(val)
+        except:
+            assert False, "Parameter Parse Failure"
+        self.params={"anchor_labels":None,"anchor_times":None}
+        self.params.update(params_dict)
+
+    def run(self,file_path):
+        self.state=["Preparing",0]
+        self.dataset=Dataset(file_path)
+        self.dataset.open()
+        self.data_info=self.dataset.get_data_info()
+        anchor_labels=self.params["anchor_labels"]
+        if anchor_labels is None:
+            anchor_labels=np.arange(1,self.data_info["N_points"]+1)
+        anchor_times=self.params["anchor_times"]
+        if anchor_times is None:
+            anchor_times=np.arange(1,self.data_info["T"]+1)
+
+
+
+        #self.dataset.set_data("helper_NN",ptss,overwrite=True)
+        self.dataset.close()
+        self.state="Done"
+
+    def quit(self):
+        pass
 
 def NN(command_pipe_sub,file_path,params):
     method=NNClass(params)
@@ -278,9 +318,9 @@ def NN(command_pipe_sub,file_path,params):
         elif command=="close":
             thread.join()
             break
-"""
-def TargetNN(methodclass,command_pipe_sub,file_path,params):
-    method=TargetNNClass(params)
+
+def BayesianNPS(command_pipe_sub,file_path,params):
+    method=BayesianNPSClass(params)
     thread=threading.Thread(target=method.run,args=(file_path,))
     while True:
         command=command_pipe_sub.recv()
@@ -295,8 +335,14 @@ def TargetNN(methodclass,command_pipe_sub,file_path,params):
         elif command=="close":
             thread.join()
             break
-"""
-methods={"NN":NN,}
+
+methods={"NN":NN,"BayesianNPS":BayesianNPS}
+methodhelp={}
+for name,method in methods.items():
+    try:
+        methodhelp[name]=method.help
+    except:
+        methodhelp[name]="No Help Message"
 
 
 if __name__=="__main__":
