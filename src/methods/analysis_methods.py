@@ -10,19 +10,29 @@ import threading
 
 class GaussianIntegralClass():
     def __init__(self,params):
+        self.state=""
+        self.cancel=False
+        
+        params_dict={}
+        try:
+            for txt in params.strip().split(";"):
+                if txt=="":
+                    continue
+                key,val=txt.split("=")
+                params_dict[key]=eval(val)
+        except:
+            assert False, "Parameter Parse Failure"   
         self.params={"sigma_x":1.5,"sigma_y":1.5,"sigma_z":0.4,"ker_x":7,"ker_y":7,"ker_z":1}
-        self.params.update(params)
-
+        self.params.update(params_dict)
+        
         arrs=[np.arange(self.params[key])-self.params[key]//2 for key in ["ker_x","ker_y","ker_z"]]
         x,y,z=np.meshgrid(*arrs,indexing="ij")
         kernel=np.exp(-0.5*((x/self.params["sigma_x"])**2+(y/self.params["sigma_y"])**2+(z/self.params["sigma_z"])**2))
         kernel/=kernel.sum()
         self.kernel=kernel
         self.coord_grid=np.stack([x,y,z],axis=0)
-        self.state=""
-        self.cancel=False
 
-
+        
     def run(self,file_path):
         dataset=Dataset(file_path)
         dataset.open()
@@ -30,6 +40,10 @@ class GaussianIntegralClass():
         points=dataset.get_points()
         self.data_info=dataset.get_data_info()
         self.C=self.data_info["C"]
+        if not(self.C==1 or self.C==2):
+            print("Only 1 or 2 channels allowed")
+            self.state="Done"
+            return
         self.xm,self.xM=-0.5+self.params["ker_x"]//2,self.data_info["W"]-0.5-self.params["ker_x"]//2
         self.ym,self.yM=-0.5+self.params["ker_y"]//2,self.data_info["H"]-0.5-self.params["ker_y"]//2
         self.zm,self.zM=-0.5+self.params["ker_z"]//2,self.data_info["D"]-0.5-self.params["ker_z"]//2
@@ -44,7 +58,10 @@ class GaussianIntegralClass():
             self.state=["Integrating",int(100*(t/self.data_info["T"]))]
 
         dataset.set_data("GaussianIntegral",intensities,overwrite=True)
-        dataset.set_data("signal_GaussianIntegral",intensities[:,:,1]/intensities[:,:,0],overwrite=True)
+        if self.C==2:
+            dataset.set_data("signal_GaussianIntegral",intensities[:,:,1]/intensities[:,:,0],overwrite=True)
+        else:
+            dataset.set_data("signal_GaussianIntegral",intensities[:,:,0],overwrite=True)
         dataset.close()
         self.state="Done"
 

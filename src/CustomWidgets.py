@@ -437,9 +437,12 @@ class TrackTab(QWidget):
         self.gui=gui
 
         self.methods=tracking_methods.methods
-
-        row=0
         self.grid=QGridLayout()
+        
+        row=0
+        self.grid.addWidget(QLabel("Select Method"),row,0)
+        row+=1
+
         self.combobox=QComboBox()
         self.combobox.addItem("")
         for key in self.methods.keys():
@@ -523,9 +526,12 @@ class AnalysisTab(QWidget):
         self.gui=gui
 
         self.methods=analysis_methods.methods
-
-        row=0
         self.grid=QGridLayout()
+        
+        row=0
+        self.grid.addWidget(QLabel("Select Method"),row,0)
+        row+=1
+        
         self.combobox=QComboBox()
         self.combobox.addItem("")
         for key in self.methods.keys():

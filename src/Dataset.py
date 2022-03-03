@@ -67,16 +67,8 @@ class Dataset:
     def get_data_info(self):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
-            dict={"T":self.data.attrs["T"],
-                "C":self.data.attrs["C"],
-                "W":self.data.attrs["W"],
-                "H":self.data.attrs["H"],
-                "D":self.data.attrs["D"],
-                "N_points":self.data.attrs["N_points"],
-                "description":self.data.attrs["description"] if "description" in self.data.attrs.keys() else "",
-                }
-            return dict
-
+            return dict(self.data.attrs)
+    
     def update_data_info(self,dict):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
