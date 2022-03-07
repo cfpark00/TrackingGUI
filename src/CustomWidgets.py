@@ -8,7 +8,6 @@ import numpy as np
 import time
 from src.methods import analysis_methods
 from src.methods import tracking_methods
-import threading
 from multiprocessing import Process,Pipe
 
 class PointBarWidget(QScrollArea):
