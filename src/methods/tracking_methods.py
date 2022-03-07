@@ -353,6 +353,129 @@ class NPSClass():
     def quit(self):
         pass
 
+class KernelCorrelation2DClass():
+    help=str({"forward":True,"kernel_size":51,"search_size":101,"refine_size":3})
+
+    def __init__(self,params):
+        self.state=""
+        self.cancel=False
+
+        params_dict={}
+        try:
+            for txt in params.strip().split(";"):
+                if txt=="":
+                    continue
+                key,val=txt.split("=")
+                params_dict[key]=eval(val)
+        except:
+            assert False, "Parameter Parse Failure"
+        self.params={"forward":True,"kernel_size":51,"search_size":101,"refine_size":3}
+        self.params.update(params_dict)
+
+    def run(self,file_path):
+        self.state=["Preparing",0]
+        kernel_size=self.params["kernel_size"]
+        search_size=self.params["search_size"]
+        refine_size=self.params["refine_size"]
+        corr_size=search_size-kernel_size+1
+
+        self.state=["Preparing",0]
+        self.dataset=Dataset(file_path)
+        self.dataset.open()
+        self.data_info=self.dataset.get_data_info()
+        C=self.data_info["C"]
+        T=self.data_info["T"]
+        assert self.data_info["D"]==1,"Data must be 2d"
+
+        grid=np.arange(kernel_size)-kernel_size//2
+        gridc,gridx,gridy=np.meshgrid(np.arange(C),grid,grid,indexing="ij")
+        grid=np.arange(search_size)-search_size//2
+        sgridc,sgridx,sgridy=np.meshgrid(np.arange(C),grid,grid,indexing="ij")
+        grid=np.arange(corr_size)-corr_size//2
+        cgridx,cgridy=np.meshgrid(grid,grid,indexing="ij")
+        grid=np.arange(refine_size)-refine_size//2
+        rgridx,rgridy=np.meshgrid(grid,grid,indexing="ij")
+        rgrid=np.stack([rgridx,rgridy],axis=0)
+
+
+        ptss=self.dataset.get_points()
+        self.state=["Running",0]
+        for i in range(T-1):
+            if self.cancel:
+                self.quit()
+                return
+            t_now=i
+            t_next=i+1
+            if i==0:
+                im_now=self.dataset.get_frame(t_now)
+            else:
+                im_now=im_next
+            im_next=self.dataset.get_frame(t_next)
+
+            valid=~np.isnan(ptss[t_now,:,0])
+            labels=[]
+            kernels=[]
+            images=[]
+            for label,valid in enumerate(valid):
+                if not valid:
+                    continue
+                labels.append(label)
+                coord=ptss[t_now,label,:2]
+                kernels.append(sim.map_coordinates(im_now[:,:,:,0],[gridc,coord[0]+gridx,coord[1]+gridy],order=1)/255)
+                images.append(sim.map_coordinates(im_next[:,:,:,0],[sgridc,coord[0]+sgridx,coord[1]+sgridy],order=1)/255)
+            kernels=np.stack(kernels,0)
+            kernels-=kernels.mean(axis=(2,3))[:,:,None,None]
+            kernels/=(kernels.std(axis=(2,3))[:,:,None,None]+1e-10)
+            images=np.stack(images,0)
+            images-=images.mean(axis=(2,3))[:,:,None,None]
+            images/=(images.std(axis=(2,3))[:,:,None,None]+1e-10)
+
+            corrs=self.get_corrs(images,kernels,device="cpu")
+            disps=self.get_disps(corrs,rgrid)
+
+            for label,disp in zip(labels,disps):
+                if np.isnan(ptss[t_next,label,0]):
+                    print(label,ptss[t_now,label,:2],disp)
+                    ptss[t_next,label,:2]=ptss[t_now,label,:2]+disp
+                    ptss[t_next,label,2]=0
+            print(i)
+            self.state[1]=int(100*((i+1)/(T-1)))
+            if i==20:
+                break
+
+        self.dataset.set_data("helper_KernelCorrelation2D",ptss,overwrite=True)
+        self.dataset.close()
+        self.state="Done"
+
+
+    def get_corrs(self,images,kernels,device="cpu"):
+        import torch
+        B,C,W,H=images.shape
+        ten_ker=torch.tensor(kernels,dtype=torch.float32,device=device)
+        ten_im=torch.tensor(images,dtype=torch.float32,device=device).reshape(1,B*C,W,H)
+        corrs=torch.nn.functional.conv2d(ten_im,ten_ker,groups=B)
+        return corrs.reshape(B,C,corrs.shape[2],corrs.shape[3])
+
+    def get_disps(self,corrs,rgrid):
+        corrs=corrs.sum(1)
+        B,W,H=corrs.shape
+        corrs=corrs.reshape(B,-1).cpu().numpy()
+        maxinds=np.argmax(corrs,axis=1)
+        peak_coords=np.stack(np.unravel_index(maxinds,(W,H)),axis=1)
+        s=rgrid.shape[1]//2
+        valids=(peak_coords[:,0]>=s)*(peak_coords[:,0]<(W-s))*(peak_coords[:,1]>=s)*(peak_coords[:,1]<(H-s))
+        peak_coords_float=peak_coords.astype(np.float32)
+        for i,(peak_coord,valid) in enumerate(zip(peak_coords,valids)):
+            if valid:
+                weight=np.clip(corrs[peak_coord[0]+rgrid[0],peak_coord[1]+rgrid[1]],0,np.inf)
+                if np.sum(weight)!=0:
+                    peak_coords_float[i]+=np.sum(weight[None]*rgrid,axis=(1,2))/np.sum(weight)
+        return peak_coords_float-W//2
+
+    def quit(self):
+        self.dataset.close()
+
+
 def NN(command_pipe_sub,file_path,params):
     method=NNClass(params)
     thread=threading.Thread(target=method.run,args=(file_path,))
@@ -387,8 +510,25 @@ def NPS(command_pipe_sub,file_path,params):
             thread.join()
             break
 
-methods={"NN":NN,"NPS":NPS}
-methodhelps={"NN":NNClass.help,"NPS":NPSClass.help}
+def KernelCorrelation2D(command_pipe_sub,file_path,params):
+    method=KernelCorrelation2DClass(params)
+    thread=threading.Thread(target=method.run,args=(file_path,))
+    while True:
+        command=command_pipe_sub.recv()
+        if command=="run":
+            thread.start()
+        elif command=="report":
+            command_pipe_sub.send(method.state)
+        elif command=="cancel":
+            method.cancel=True
+            thread.join()
+            break
+        elif command=="close":
+            thread.join()
+            break
+
+methods={"NN":NN,"BayesianNPS":BayesianNPS,"NPS":NPS,"KernelCorrelation2D":KernelCorrelation2D}
+methodhelps={"NN":NNClass.help,"BayesianNPS":BayesianNPSClass.help,"NPS":NPSClass.help,"KernelCorrelation2D":KernelCorrelation2DClass.help}
 
 
 if __name__=="__main__":
