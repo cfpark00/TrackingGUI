@@ -527,8 +527,8 @@ def KernelCorrelation2D(command_pipe_sub,file_path,params):
             thread.join()
             break
 
-methods={"NN":NN,"BayesianNPS":BayesianNPS,"NPS":NPS,"KernelCorrelation2D":KernelCorrelation2D}
-methodhelps={"NN":NNClass.help,"BayesianNPS":BayesianNPSClass.help,"NPS":NPSClass.help,"KernelCorrelation2D":KernelCorrelation2DClass.help}
+methods={"NN":NN,"NPS":NPS,"KernelCorrelation2D":KernelCorrelation2D}
+methodhelps={"NN":NNClass.help,"NPS":NPSClass.help,"KernelCorrelation2D":KernelCorrelation2DClass.help}
 
 
 if __name__=="__main__":
