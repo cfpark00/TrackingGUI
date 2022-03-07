@@ -436,8 +436,9 @@ class TrackTab(QWidget):
         self.gui=gui
 
         self.methods=tracking_methods.methods
+        self.methodhelps=tracking_methods.methodhelps
         self.grid=QGridLayout()
-        
+
         row=0
         self.grid.addWidget(QLabel("Select Method"),row,0)
         row+=1
@@ -447,8 +448,13 @@ class TrackTab(QWidget):
         for key in self.methods.keys():
             self.combobox.addItem(key)
         self.combobox.setCurrentIndex(0)
-        self.combobox.currentIndexChanged.connect(lambda x: self.run_button.setEnabled(False) if x==0 else self.run_button.setEnabled(True))
+        self.combobox.currentIndexChanged.connect(self.make_method_change_func())
         self.grid.addWidget(self.combobox,row,0)
+        row+=1
+
+        self.help=QLabel()
+        self.help.setWordWrap(True)
+        self.grid.addWidget(self.help,row,0)
         row+=1
 
         self.param_edit=QLineEdit()
@@ -463,6 +469,16 @@ class TrackTab(QWidget):
         row+=1
 
         self.setLayout(self.grid)
+
+    def make_method_change_func(self):
+        def method_change_func(index):
+            if index==0:
+                self.run_button.setEnabled(False)
+                self.help.setText("")
+            else:
+                self.run_button.setEnabled(True)
+                self.help.setText(self.methodhelps[str(self.combobox.currentText())])
+        return method_change_func
 
     def make_run_function(self):
         def run_function():
@@ -526,11 +542,11 @@ class AnalysisTab(QWidget):
 
         self.methods=analysis_methods.methods
         self.grid=QGridLayout()
-        
+
         row=0
         self.grid.addWidget(QLabel("Select Method"),row,0)
         row+=1
-        
+
         self.combobox=QComboBox()
         self.combobox.addItem("")
         for key in self.methods.keys():

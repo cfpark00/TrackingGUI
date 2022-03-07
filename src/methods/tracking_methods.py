@@ -264,7 +264,8 @@ class NNClass():
     def quit(self):
         shutil.rmtree(self.folpath)
 
-class BayesianNPSClass():
+class NPSClass():
+    help="Not Yet"
     def __init__(self,params):
         self.state=""
         self.cancel=False
@@ -278,7 +279,7 @@ class BayesianNPSClass():
                 params_dict[key]=eval(val)
         except:
             assert False, "Parameter Parse Failure"
-        self.params={"anchor_labels":None,"anchor_times":None}
+        self.params={"anchor_labels":None,"anchor_times":None,"radius":50}
         self.params.update(params_dict)
 
     def run(self,file_path):
@@ -286,25 +287,75 @@ class BayesianNPSClass():
         self.dataset=Dataset(file_path)
         self.dataset.open()
         self.data_info=self.dataset.get_data_info()
+        T=self.data_info["T"]
+        N_points=self.data_info["N_points"]
         anchor_labels=self.params["anchor_labels"]
         if anchor_labels is None:
-            anchor_labels=np.arange(1,self.data_info["N_points"]+1)
+            anchor_labels=np.arange(1,N_points+1)
         anchor_times=self.params["anchor_times"]
         if anchor_times is None:
-            anchor_times=np.arange(1,self.data_info["T"]+1)
+            anchor_times=np.arange(1,T+1)
+        points=self.dataset.get_points()
+        dists=np.zeros((N_points,N_points))
+        counts=np.zeros((N_points,N_points))
+        self.state=["Calculating distance matrix",0]
+        for i,points_t in enumerate(points):
+            distmat=sspat.distance.squareform(sspat.distance.pdist(points_t[1:,:2]))
+            valid=~np.isnan(distmat)
+            np.fill_diagonal(valid, 0)
+            distmat[~valid]=0
+            dists+=distmat
+            counts+=valid
+            self.state[1]=int(100*((i+1)/T))
+        dists=np.divide(dists,counts,where=counts!=0,out=np.full_like(dists,np.nan))
 
-
-
-        #self.dataset.set_data("helper_NN",ptss,overwrite=True)
+        self.state=["Assigning references",0]
+        refss=[]
+        for i in range(N_points):
+            valids=~np.isnan(dists[i])
+            if np.sum(valids)<3:
+                refss.append(None)
+            else:
+                inds=np.nonzero(valids)[0]
+                dists_=dists[i][inds]
+                inside=dists_<self.params["radius"]
+                if np.sum(inside)<3:
+                    refss.append(None)
+                else:
+                    refss.append(inds[inside])
+        for i in range(N_points):
+            print(i,refss[i])
+        self.state=["Locating Points",0]
+        ptss=np.full_like(points,np.nan)
+        for t in range(T):
+            todo=np.nonzero(np.isnan(points[t,1:,0]))[0]
+            for i in todo:
+                refs=refss[i]
+                if refs is None:
+                    continue
+                refcoords=points[t,refs+1,:2]
+                validrefs=~np.isnan(refcoords[:,0])
+                if validrefs.sum()<3:
+                    continue
+                refcoords=refcoords[validrefs]
+                refds=dists[i,refs][validrefs]
+                A=2*(refcoords[0][None,:]-refcoords[1:])
+                b=refds[1:]**2-np.sum(refcoords[1:]**2,axis=1)-refds[0]**2+np.sum(refcoords[0]**2)
+                #coord=np.linalg.inv(A)@b
+                coord=np.linalg.inv((A.T)@A)@(A.T)@b
+                ptss[t,1+i,:2]=coord
+                ptss[t,1+i,2]=0
+            self.state[1]=int(100*((t+1)/T))
+        self.dataset.set_data("helper_NPS",ptss,overwrite=True)
         self.dataset.close()
         self.state="Done"
 
     def quit(self):
         pass
-        
+
 class KernelCorrelation2DClass():
     help=str({"forward":True,"kernel_size":51,"search_size":101,"refine_size":3})
-    
+
     def __init__(self,params):
         self.state=""
         self.cancel=False
@@ -327,7 +378,7 @@ class KernelCorrelation2DClass():
         search_size=self.params["search_size"]
         refine_size=self.params["refine_size"]
         corr_size=search_size-kernel_size+1
-        
+
         self.state=["Preparing",0]
         self.dataset=Dataset(file_path)
         self.dataset.open()
@@ -335,7 +386,7 @@ class KernelCorrelation2DClass():
         C=self.data_info["C"]
         T=self.data_info["T"]
         assert self.data_info["D"]==1,"Data must be 2d"
-        
+
         grid=np.arange(kernel_size)-kernel_size//2
         gridc,gridx,gridy=np.meshgrid(np.arange(C),grid,grid,indexing="ij")
         grid=np.arange(search_size)-search_size//2
@@ -345,8 +396,8 @@ class KernelCorrelation2DClass():
         grid=np.arange(refine_size)-refine_size//2
         rgridx,rgridy=np.meshgrid(grid,grid,indexing="ij")
         rgrid=np.stack([rgridx,rgridy],axis=0)
-        
-        
+
+
         ptss=self.dataset.get_points()
         self.state=["Running",0]
         for i in range(T-1):
@@ -360,7 +411,7 @@ class KernelCorrelation2DClass():
             else:
                 im_now=im_next
             im_next=self.dataset.get_frame(t_next)
-            
+
             valid=~np.isnan(ptss[t_now,:,0])
             labels=[]
             kernels=[]
@@ -378,10 +429,10 @@ class KernelCorrelation2DClass():
             images=np.stack(images,0)
             images-=images.mean(axis=(2,3))[:,:,None,None]
             images/=(images.std(axis=(2,3))[:,:,None,None]+1e-10)
-        
+
             corrs=self.get_corrs(images,kernels,device="cpu")
             disps=self.get_disps(corrs,rgrid)
-            
+
             for label,disp in zip(labels,disps):
                 if np.isnan(ptss[t_next,label,0]):
                     print(label,ptss[t_now,label,:2],disp)
@@ -404,7 +455,7 @@ class KernelCorrelation2DClass():
         ten_im=torch.tensor(images,dtype=torch.float32,device=device).reshape(1,B*C,W,H)
         corrs=torch.nn.functional.conv2d(ten_im,ten_ker,groups=B)
         return corrs.reshape(B,C,corrs.shape[2],corrs.shape[3])
-        
+
     def get_disps(self,corrs,rgrid):
         corrs=corrs.sum(1)
         B,W,H=corrs.shape
@@ -423,8 +474,8 @@ class KernelCorrelation2DClass():
 
     def quit(self):
         self.dataset.close()
-    
-    
+
+
 def NN(command_pipe_sub,file_path,params):
     method=NNClass(params)
     thread=threading.Thread(target=method.run,args=(file_path,))
@@ -442,8 +493,8 @@ def NN(command_pipe_sub,file_path,params):
             thread.join()
             break
 
-def BayesianNPS(command_pipe_sub,file_path,params):
-    method=BayesianNPSClass(params)
+def NPS(command_pipe_sub,file_path,params):
+    method=NPSClass(params)
     thread=threading.Thread(target=method.run,args=(file_path,))
     while True:
         command=command_pipe_sub.recv()
@@ -476,13 +527,8 @@ def KernelCorrelation2D(command_pipe_sub,file_path,params):
             thread.join()
             break
 
-methods={"NN":NN,"BayesianNPS":BayesianNPS,"KernelCorrelation2D":KernelCorrelation2D}
-methodhelp={}
-for name,method in methods.items():
-    try:
-        methodhelp[name]=method.help
-    except:
-        methodhelp[name]="No Help Message"
+methods={"NN":NN,"BayesianNPS":BayesianNPS,"NPS":NPS,"KernelCorrelation2D":KernelCorrelation2D}
+methodhelps={"NN":NNClass.help,"BayesianNPS":BayesianNPSClass.help,"NPS":NPSClass.help,"KernelCorrelation2D":KernelCorrelation2DClass.help}
 
 
 if __name__=="__main__":
