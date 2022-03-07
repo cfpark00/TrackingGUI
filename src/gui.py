@@ -114,16 +114,33 @@ class GUI():
             self.win.figurewidget.update_data(data)
             self.update_presence()
             self.last_update_t=time.time()
+
         elif key=="fig_keypress":
             kkey=val[0]
             if kkey not in self.assigned_points.keys():
-                print("key press",kkey)
-                return
+                if kkey=="d":
+                    if self.z<0:
+                        return
+                    coords=self.plotpoints[:,:3]
+                    valid=~np.isnan(coords[:,0])
+                    if np.sum(valid)==0:
+                        return
+                    indices=np.nonzero(valid)[0]
+                    dists=np.linalg.norm(coords[valid]-np.array([val[1],val[2],self.z])[None,:],axis=1)
+                    am=np.argmin(dists)
+                    if dists[am]<self.click_distance:
+                        self.respond("delete_single",indices[am])
+                    return
+                else:
+                    print("key press",kkey)
+                    return
             coord=np.array([val[1],val[2],self.z]).astype(np.float32)
             if self.assigned_points[kkey] is not None:
                 if (-0.5<coord[0]<(self.W-0.5)) and (-0.5<coord[1]<(self.H-0.5)) and (-0.5<coord[2]<(self.D-0.5)):
                     i_point=self.assigned_points[kkey]
                     self.points[self.time-1,i_point]=coord
+        elif key=="delete_single":
+            self.points[self.time-1,val,:]=np.nan
         elif key=="fig_click":
             if val[0]==1:
                 coords=self.plotpoints[:,:3]

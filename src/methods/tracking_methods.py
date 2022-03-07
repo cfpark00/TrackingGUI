@@ -373,6 +373,8 @@ class KernelCorrelation2DClass():
         self.params.update(params_dict)
 
     def run(self,file_path):
+        import torch
+        device="cuda" if torch.cuda.is_available() else "cpu"
         self.state=["Preparing",0]
         kernel_size=self.params["kernel_size"]
         search_size=self.params["search_size"]
@@ -430,17 +432,15 @@ class KernelCorrelation2DClass():
             images-=images.mean(axis=(2,3))[:,:,None,None]
             images/=(images.std(axis=(2,3))[:,:,None,None]+1e-10)
 
-            corrs=self.get_corrs(images,kernels,device="cpu")
+            corrs=self.get_corrs(images,kernels,device=device)
             disps=self.get_disps(corrs,rgrid)
 
             for label,disp in zip(labels,disps):
                 if np.isnan(ptss[t_next,label,0]):
-                    print(label,ptss[t_now,label,:2],disp)
                     ptss[t_next,label,:2]=ptss[t_now,label,:2]+disp
                     ptss[t_next,label,2]=0
-            print(i)
             self.state[1]=int(100*((i+1)/(T-1)))
-            if i==20:
+            if i==500:
                 break
 
         self.dataset.set_data("helper_KernelCorrelation2D",ptss,overwrite=True)
@@ -462,18 +462,94 @@ class KernelCorrelation2DClass():
         corrs=corrs.reshape(B,-1).cpu().numpy()
         maxinds=np.argmax(corrs,axis=1)
         peak_coords=np.stack(np.unravel_index(maxinds,(W,H)),axis=1)
-        s=rgrid.shape[1]//2
-        valids=(peak_coords[:,0]>=s)*(peak_coords[:,0]<(W-s))*(peak_coords[:,1]>=s)*(peak_coords[:,1]<(H-s))
-        peak_coords_float=peak_coords.astype(np.float32)
-        for i,(peak_coord,valid) in enumerate(zip(peak_coords,valids)):
-            if valid:
-                weight=np.clip(corrs[peak_coord[0]+rgrid[0],peak_coord[1]+rgrid[1]],0,np.inf)
-                if np.sum(weight)!=0:
-                    peak_coords_float[i]+=np.sum(weight[None]*rgrid,axis=(1,2))/np.sum(weight)
-        return peak_coords_float-W//2
+        #s=rgrid.shape[1]//2
+        #valids=(peak_coords[:,0]>=s)*(peak_coords[:,0]<(W-s))*(peak_coords[:,1]>=s)*(peak_coords[:,1]<(H-s))
+        #peak_coords_float=peak_coords.astype(np.float32)
+        #for i,(peak_coord,valid) in enumerate(zip(peak_coords,valids)):
+        #    if valid:
+        #        weight=np.clip(corrs[peak_coord[0]+rgrid[0],peak_coord[1]+rgrid[1]],0,np.inf)
+        #        if np.sum(weight)!=0:
+        #            peak_coords_float[i]+=np.sum(weight[None]*rgrid,axis=(1,2))/np.sum(weight)
+        return peak_coords-W//2
 
     def quit(self):
         self.dataset.close()
+
+class InvDistInterpClass():
+    help="yup"
+    def __init__(self,params):
+        self.state=""
+        self.cancel=False
+
+        params_dict={}
+        try:
+            for txt in params.strip().split(";"):
+                if txt=="":
+                    continue
+                key,val=txt.split("=")
+                params_dict[key]=eval(val)
+        except:
+            assert False, "Parameter Parse Failure"
+        self.params={"t_ref":0,"epslion":1e-10}
+        self.params.update(params_dict)
+
+    def run(self,file_path):
+        epsilon=self.params["epslion"]
+        t_ref=self.params["t_ref"]
+
+        self.state=["Preparing",0]
+        self.dataset=Dataset(file_path)
+        self.dataset.open()
+        self.data_info=self.dataset.get_data_info()
+        T=self.data_info["T"]
+        N_points=self.data_info["N_points"]
+        points=self.dataset.get_points()
+        dists=np.zeros((N_points,N_points))
+        counts=np.zeros((N_points,N_points))
+        self.state=["Calculating distance matrix",0]
+        """
+        for i,points_t in enumerate(points):
+            distmat=sspat.distance.squareform(sspat.distance.pdist(points_t[1:,:2]))
+            valid=~np.isnan(distmat)
+            np.fill_diagonal(valid, 0)
+            distmat[~valid]=0
+            dists+=distmat
+            counts+=valid
+            self.state[1]=int(100*((i+1)/T))
+        dists=np.divide(dists,counts,where=counts!=0,out=np.full_like(dists,np.nan))
+        """
+        points_ref=points[t_ref,1:,:2]
+        existing_ref=~np.isnan(points_ref[:,0])
+        distmat=sspat.distance.squareform(sspat.distance.pdist(points_ref))
+        np.fill_diagonal(distmat,np.nan)
+
+        self.state=["Locating Points",0]
+        ptss=np.full_like(points,np.nan)
+        for t in range(T):
+            if self.cancel:
+                self.quit()
+                return
+            existing=~np.isnan(points[t,1:,0])
+            if existing.sum()==0:
+                pass
+            todo=np.nonzero(~(existing*existing_ref))[0]
+            for i in todo:
+                validrefs=np.nonzero((~np.isnan(distmat[i]))*existing*existing_ref)[0]
+                if len(validrefs)==0:
+                    continue
+                weights=(1/(distmat[i,validrefs]+epsilon))**2
+                vecs=points[t,validrefs+1,:2]-points_ref[validrefs,:2]
+                vec=(weights[:,None]*vecs).sum(0)/weights.sum()
+                ptss[t,1+i,:2]=points_ref[i]+vec
+                ptss[t,1+i,2]=0
+            self.state[1]=int(100*((t+1)/T))
+        self.dataset.set_data("helper_InvDistInterp",ptss,overwrite=True)
+        self.dataset.close()
+        self.state="Done"
+
+    def quit(self):
+        self.dataset.close()
+        pass
 
 
 def NN(command_pipe_sub,file_path,params):
@@ -527,8 +603,25 @@ def KernelCorrelation2D(command_pipe_sub,file_path,params):
             thread.join()
             break
 
-methods={"NN":NN,"NPS":NPS,"KernelCorrelation2D":KernelCorrelation2D}
-methodhelps={"NN":NNClass.help,"NPS":NPSClass.help,"KernelCorrelation2D":KernelCorrelation2DClass.help}
+def InvDistInterp(command_pipe_sub,file_path,params):
+    method=InvDistInterpClass(params)
+    thread=threading.Thread(target=method.run,args=(file_path,))
+    while True:
+        command=command_pipe_sub.recv()
+        if command=="run":
+            thread.start()
+        elif command=="report":
+            command_pipe_sub.send(method.state)
+        elif command=="cancel":
+            method.cancel=True
+            thread.join()
+            break
+        elif command=="close":
+            thread.join()
+            break
+
+methods={"NN":NN,"NPS":NPS,"KernelCorrelation2D":KernelCorrelation2D,"InvDistInterp":InvDistInterp}
+methodhelps={"NN":NNClass.help,"NPS":NPSClass.help,"KernelCorrelation2D":KernelCorrelation2DClass.help,"InvDistInterp":InvDistInterpClass.help}
 
 
 if __name__=="__main__":
