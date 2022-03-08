@@ -542,6 +542,8 @@ class InvDistInterpClass():
                 vec=(weights[:,None]*vecs).sum(0)/weights.sum()
                 ptss[t,1+i,:2]=points_ref[i]+vec
                 ptss[t,1+i,2]=0
+
+
             self.state[1]=int(100*((t+1)/T))
         self.dataset.set_data("helper_InvDistInterp",ptss,overwrite=True)
         self.dataset.close()
