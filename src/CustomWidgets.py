@@ -435,7 +435,7 @@ class TrackTab(QWidget):
         super().__init__()
         self.gui=gui
 
-        self.methods=tracking_methods.methods
+        self.methods=tracking_methods.methodnames
         self.methodhelps=tracking_methods.methodhelps
         self.grid=QGridLayout()
 
@@ -445,7 +445,7 @@ class TrackTab(QWidget):
 
         self.combobox=QComboBox()
         self.combobox.addItem("")
-        for key in self.methods.keys():
+        for key in self.methods:
             self.combobox.addItem(key)
         self.combobox.setCurrentIndex(0)
         self.combobox.currentIndexChanged.connect(self.make_method_change_func())
@@ -509,7 +509,7 @@ class TrackTab(QWidget):
         QApplication.processEvents()
 
         command_pipe_main,command_pipe_sub=Pipe()
-        process = Process(target=self.methods[method_name], args=(command_pipe_sub,self.gui.dataset.file_path,params))
+        process = Process(target=tracking_methods.run, args=(method_name,command_pipe_sub,self.gui.dataset.file_path,params))
         process.start()
         command_pipe_main.send("run")
         while True:

@@ -1,6 +1,7 @@
 import os
 import sys
 sys.path.append(os.getcwd())
+currmod=sys.modules[__name__]
 from src.Dataset import *
 
 import os
@@ -13,13 +14,14 @@ import scipy.spatial as sspat
 
 import matplotlib.pyplot as plt
 
-class NNClass():
-    help=str({"min_points":1,"channels":None,"mask_radius":4,"2D":False,
+class NN():
+    default_params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,
     "lr":0.01,
     "n_steps":1000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
     "Targeted":False,"n_epoch_posture":10,"batch_size_posture":16,"umap_dim":None,
     "weight_channel":None,
-    })
+    }
+    help=str(default_params)
     def __init__(self,params):
         self.state=""
         self.cancel=False
@@ -32,13 +34,8 @@ class NNClass():
                 key,val=txt.split("=")
                 params_dict[key]=eval(val)
         except:
-            assert False, "Parameter Parse Failure"
-        self.params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,
-        "lr":0.01,
-        "n_steps":1000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
-        "Targeted":False,"n_epoch_posture":10,"batch_size_posture":16,"umap_dim":None,
-        "weight_channel":None,
-        }
+            print("Parameter Parse Failure")
+        self.params=self.default_params
         self.params.update(params_dict)
 
         if self.params["2D"]:
@@ -264,8 +261,9 @@ class NNClass():
     def quit(self):
         shutil.rmtree(self.folpath)
 
-class NPSClass():
-    help="Not Yet"
+class NPS():
+    default_params={"anchor_labels":None,"anchor_times":None,"radius":50}
+    help=str(default_params)
     def __init__(self,params):
         self.state=""
         self.cancel=False
@@ -278,8 +276,8 @@ class NPSClass():
                 key,val=txt.split("=")
                 params_dict[key]=eval(val)
         except:
-            assert False, "Parameter Parse Failure"
-        self.params={"anchor_labels":None,"anchor_times":None,"radius":50}
+            print("Parameter Parse Failure")
+        self.params=self.default_params
         self.params.update(params_dict)
 
     def run(self,file_path):
@@ -353,9 +351,9 @@ class NPSClass():
     def quit(self):
         pass
 
-class KernelCorrelation2DClass():
-    help=str({"forward":True,"kernel_size":51,"search_size":101,"refine_size":3})
-
+class KernelCorrelation2D():
+    default_params={"forward":True,"kernel_size":51,"search_size":101,"refine_size":3}
+    help=str(default_params)
     def __init__(self,params):
         self.state=""
         self.cancel=False
@@ -368,8 +366,8 @@ class KernelCorrelation2DClass():
                 key,val=txt.split("=")
                 params_dict[key]=eval(val)
         except:
-            assert False, "Parameter Parse Failure"
-        self.params={"forward":True,"kernel_size":51,"search_size":101,"refine_size":3}
+            print("Parameter Parse Failure")
+        self.params=self.default_params
         self.params.update(params_dict)
 
     def run(self,file_path):
@@ -475,8 +473,9 @@ class KernelCorrelation2DClass():
     def quit(self):
         self.dataset.close()
 
-class InvDistInterpClass():
-    help="yup"
+class InvDistInterp():
+    default_params={"t_ref":0,"epslion":1e-10}
+    help=str(default_params)
     def __init__(self,params):
         self.state=""
         self.cancel=False
@@ -489,8 +488,8 @@ class InvDistInterpClass():
                 key,val=txt.split("=")
                 params_dict[key]=eval(val)
         except:
-            assert False, "Parameter Parse Failure"
-        self.params={"t_ref":0,"epslion":1e-10}
+            print("Parameter Parse Failure")
+        self.params=self.default_params
         self.params.update(params_dict)
 
     def run(self,file_path):
@@ -553,9 +552,8 @@ class InvDistInterpClass():
         self.dataset.close()
         pass
 
-
-def NN(command_pipe_sub,file_path,params):
-    method=NNClass(params)
+def run(name,command_pipe_sub,file_path,params):
+    method=getattr(currmod,name)(params)
     thread=threading.Thread(target=method.run,args=(file_path,))
     while True:
         command=command_pipe_sub.recv()
@@ -571,59 +569,10 @@ def NN(command_pipe_sub,file_path,params):
             thread.join()
             break
 
-def NPS(command_pipe_sub,file_path,params):
-    method=NPSClass(params)
-    thread=threading.Thread(target=method.run,args=(file_path,))
-    while True:
-        command=command_pipe_sub.recv()
-        if command=="run":
-            thread.start()
-        elif command=="report":
-            command_pipe_sub.send(method.state)
-        elif command=="cancel":
-            method.cancel=True
-            thread.join()
-            break
-        elif command=="close":
-            thread.join()
-            break
-
-def KernelCorrelation2D(command_pipe_sub,file_path,params):
-    method=KernelCorrelation2DClass(params)
-    thread=threading.Thread(target=method.run,args=(file_path,))
-    while True:
-        command=command_pipe_sub.recv()
-        if command=="run":
-            thread.start()
-        elif command=="report":
-            command_pipe_sub.send(method.state)
-        elif command=="cancel":
-            method.cancel=True
-            thread.join()
-            break
-        elif command=="close":
-            thread.join()
-            break
-
-def InvDistInterp(command_pipe_sub,file_path,params):
-    method=InvDistInterpClass(params)
-    thread=threading.Thread(target=method.run,args=(file_path,))
-    while True:
-        command=command_pipe_sub.recv()
-        if command=="run":
-            thread.start()
-        elif command=="report":
-            command_pipe_sub.send(method.state)
-        elif command=="cancel":
-            method.cancel=True
-            thread.join()
-            break
-        elif command=="close":
-            thread.join()
-            break
-
-methods={"NN":NN,"NPS":NPS,"KernelCorrelation2D":KernelCorrelation2D,"InvDistInterp":InvDistInterp}
-methodhelps={"NN":NNClass.help,"NPS":NPSClass.help,"KernelCorrelation2D":KernelCorrelation2DClass.help,"InvDistInterp":InvDistInterpClass.help}
+methodnames=["NN","InvDistInterp"]
+methodhelps={}
+for name in methodnames:
+    methodhelps[name]=getattr(currmod,name).help
 
 
 if __name__=="__main__":
