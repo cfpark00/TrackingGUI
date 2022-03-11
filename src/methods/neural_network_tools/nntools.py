@@ -137,6 +137,7 @@ class EvalDataset(Dataset):
         if self.mask:
             self.maskfolpath=os.path.join(self.folpath,"masks")
         self.num_frames_tot=T
+        
 
     def __getitem__(self,i):
         assert 0<=i<self.num_frames_tot
