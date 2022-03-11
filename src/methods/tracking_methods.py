@@ -17,9 +17,16 @@ import matplotlib.pyplot as plt
 class NN():
     default_params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,
     "lr":0.01,
-    "n_steps":1000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
-    "Targeted":False,"n_epoch_posture":10,"batch_size_posture":16,"umap_dim":None,
+    "n_steps":2,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
     "weight_channel":None,
+    
+    "Targeted":False,
+    "recalcdistmat":True,"n_steps_posture":5,"batch_size_posture":16,"umap_dim":None,
+    "deformparams":{"k_cut_dimless":2.5,"lr":0.1,"iterations":200,"lambda_div":1,"at_least":5},"num_additional":80,
+    "pixel_scale":None,
+    
+    "DeformAug":False,
+    "deformaugparams":{"epsilon":1e-10}
     }
     help=str(default_params)
     def __init__(self,params):
@@ -43,7 +50,8 @@ class NN():
         assert self.params["min_points"]>0
 
     def run(self,file_path):
-        from src.methods.neural_network_tools import nntools
+        from src.methods.neural_network_tools import NNtools
+        from src.methods.neural_network_tools import Deformation
         import torch
         from src.methods.neural_network_tools import Networks
         if self.params["Targeted"] and self.params["umap_dim"] is not None:
@@ -62,57 +70,68 @@ class NN():
         self.data_info=self.dataset.get_data_info()
         os.makedirs(os.path.join(self.folpath,"frames"))
         os.makedirs(os.path.join(self.folpath,"masks"))
-        os.makedirs(os.path.join(self.folpath,"log"))
+        #os.makedirs(os.path.join(self.folpath,"log"))
 
         if self.params["2D"]:
             assert self.data_info["D"]==1,"Input not 2D"
+        if (self.params["pixel_scale"] is None) and ("pixel_scale" in self.data_info.keys()):
+            self.params["pixel_scale"]=self.data_info["pixel_scale"]
+        else:
+            self.params["pixel_scale"]=(1,1,1)
+        
+        #make files
+        if True:
+            self.state=["Making Files",0]
+            T,N_points,C,W,H,D=self.data_info["T"],self.data_info["N_points"],self.data_info["C"],self.data_info["W"],self.data_info["H"],self.data_info["D"]
+            points=self.dataset.get_points()
+            min_points=self.params["min_points"]
+            channels=self.params["channels"]
+            if channels is None:
+                channels=np.arange(C)
+            n_channels=len(channels)
+            grid=np.stack(np.meshgrid(np.arange(W),np.arange(H),np.arange(D),indexing="ij"),axis=0)
+            gridpts=grid.reshape(3,-1).T
 
-        self.state=["Making Files",0]
-        T,N_points,C,W,H,D=self.data_info["T"],self.data_info["N_points"],self.data_info["C"],self.data_info["W"],self.data_info["H"],self.data_info["D"]
-        points=self.dataset.get_points()
-        min_points=self.params["min_points"]
-        channels=self.params["channels"]
-        if channels is None:
-            channels=np.arange(C)
-        n_channels=len(channels)
-        grid=np.stack(np.meshgrid(np.arange(W),np.arange(H),np.arange(D),indexing="ij"),axis=0)
-        gridpts=grid.reshape(3,-1).T
-
-        #don't think about non existing points
-        existing=np.any(~np.isnan(points[:,:,0]),axis=0)
-        existing[0]=1#for background
-        labels_to_inds=np.nonzero(existing)[0]
-        N_labels=len(labels_to_inds)
-        inds_to_labels=np.zeros(N_points+1)
-        inds_to_labels[labels_to_inds]=np.arange(N_labels)
-        for t in range(1,T+1):
-            if self.cancel:
-                self.quit()
-                return
-            image=self.dataset.get_frame(t-1)[channels]
-            image=torch.tensor(image,dtype=torch.uint8)
-            torch.save(image,os.path.join(self.folpath,"frames",str(t-1)+".pt"))
-            pts=points[t-1]
-            valid=~np.isnan(pts[:,0])
-            if valid.sum()>=min_points:
-                inds=np.nonzero(valid)[0]
-                maskpts=nntools.get_mask(inds_to_labels[inds],pts[inds],gridpts,self.params["mask_radius"])
-                mask=torch.tensor(maskpts.reshape(W,H,D),dtype=torch.uint8)
-                torch.save(mask,os.path.join(self.folpath,"masks",str(t-1)+".pt"))
-            self.state[1]=int(100*t/T)
-
-        if self.params["Targeted"]:
+            #don't think about non existing points
+            existing=np.any(~np.isnan(points[:,:,0]),axis=0)
+            existing[0]=1#for background
+            labels_to_inds=np.nonzero(existing)[0]
+            N_labels=len(labels_to_inds)
+            inds_to_labels=np.zeros(N_points+1)
+            inds_to_labels[labels_to_inds]=np.arange(N_labels)
+            for t in range(T):
+                if self.cancel:
+                    self.quit()
+                    return
+                image=self.dataset.get_frame(t)[channels]
+                image=torch.tensor(image,dtype=torch.uint8)
+                torch.save(image,os.path.join(self.folpath,"frames",str(t)+".pt"))
+                pts=points[t]
+                valid=~np.isnan(pts[:,0])
+                if valid.sum()>=min_points:
+                    inds=np.nonzero(valid)[0]
+                    maskpts=NNtools.get_mask(inds_to_labels[inds],pts[inds],gridpts,self.params["mask_radius"])
+                    mask=torch.tensor(maskpts.reshape(W,H,D),dtype=torch.uint8)
+                    torch.save(mask,os.path.join(self.folpath,"masks",str(t)+".pt"))
+                self.state[1]=int(100*(t+1)/T)
+        
+        #make posture space if TA
+        if self.params["Targeted"] and ((not self.dataset.exists("distmat")) or self.params["recalcdistmat"]):
             self.state=["Embedding Posture Space Training",0]
-            self.encnet=Networks.AutoEnc2d(sh2d=(W,H),n_channels=n_channels,n_z=min(20,T//2))
+            self.encnet=Networks.AutoEnc2d(sh2d=(W,H),n_channels=n_channels,n_z=min(20,T//4))
             self.encnet.to(device=self.device,dtype=torch.float32)
             self.encnet.train()
 
-            data=nntools.EvalDataset(folpath=self.folpath,channels=channels,T=T,maxz=True)
-            loader=torch.utils.data.DataLoader(data, batch_size=self.params["batch_size_posture"],shuffle=True,num_workers=4,pin_memory=True)
+            data=NNtools.EvalDataset(folpath=self.folpath,T=T,maxz=True)
+            loader=torch.utils.data.DataLoader(data, batch_size=self.params["batch_size_posture"],shuffle=True,num_workers=0,pin_memory=True)
             opt=torch.optim.Adam(self.encnet.parameters(),lr=self.params["lr"])
-            n_epoch=self.params["n_epoch_posture"]
-            f=open(os.path.join(self.folpath,"log","enc_loss.txt"),"w")
-            for epoch in range(n_epoch):
+            n_steps_posture=self.params["n_steps_posture"]
+            
+            self.encnet.train()
+            traindone=False
+            stepcount=0
+            #f=open(os.path.join(self.folpath,"log","enc_loss.txt"),"w")
+            while not traindone:
                 for i,ims in enumerate(loader):
                     if self.cancel:
                         self.quit()
@@ -123,15 +142,21 @@ class NN():
                     opt.zero_grad()
                     loss.backward()
                     opt.step()
-                    self.state[1]=int(100*(epoch*T+i+1)/(n_epoch*T) )
-                    f.write(str(loss.item())+"\n")
-            f.close()
+                    stepcount+=1
+                    self.state[1]=int(100*(stepcount/n_steps_posture))
+                    #print(stepcount,loss.item())
+                    #f.write(str(loss.item())+"\n")
+                    if stepcount==n_steps_posture:
+                        traindone=True
+                        break
+            #f.close()
 
             self.state=["Embedding Posture Space Evaluating",0]
             self.encnet.eval()
             vecs=[]
             with torch.no_grad():
                 for i in range(T):
+                    #print(i,T)
                     if self.cancel:
                         self.quit()
                         return
@@ -139,7 +164,7 @@ class NN():
                     vecs.append(latent[0].cpu().detach().numpy())
                     self.state[1]=int(100*((i+1)/T) )
             vecs=np.array(vecs).astype(np.float32)
-            self.dataset.set_data("latent_vecs",vecs)
+            self.dataset.set_data("latent_vecs",vecs,overwrite=True)
             def standardize(vecs):
                 m=np.mean(vecs,axis=0)
                 s=np.std(vecs,axis=0)
@@ -149,111 +174,199 @@ class NN():
                 u_map=umap.UMAP(n_components=self.params["umap_dim"])
                 vecs=u_map.fit_transform(vecs)
             distmat=sspat.distance_matrix(vecs,vecs).astype(np.float32)
-            self.dataset.set_data("distmat",distmat)
-            #plt.imshow(distmat)
-            #plt.show()
+            self.dataset.set_data("distmat",distmat,overwrite=True)
+            
+        #train network
+        if True:
+            self.state=["Training Network",0]
+            if self.params["2D"]:
+                self.net=Networks.TwoDCN(n_channels=n_channels,num_classes=N_labels)
+            else:
+                self.net=Networks.ThreeDCN(n_channels=n_channels,num_classes=N_labels)
+            self.net.to(device=self.device,dtype=torch.float32)
 
-        self.state=["Training Network",0]
-        if self.params["2D"]:
-            self.net=Networks.TwoDCN(n_channels=n_channels,num_classes=N_labels)
-        else:
-            self.net=Networks.ThreeDCN(n_channels=n_channels,num_classes=N_labels)
-        self.net.to(device=self.device,dtype=torch.float32)
-
-        train_data=nntools.TrainDataset(folpath=self.folpath,channels=channels,shape=(C,W,H,D))
-        print("tdl",len(train_data))
-        loader=torch.utils.data.DataLoader(train_data, batch_size=self.params["batch_size"],shuffle=True, num_workers=4,pin_memory=True)
-        n_batches=len(loader)
-        opt=torch.optim.Adam(self.net.parameters(),lr=self.params["lr"])
-        n_steps=self.params["n_steps"]
-
-        self.net.train()
-        traindone=False
-        stepcount=0
-        f=open(os.path.join(self.folpath,"log","loss.txt"),"w")
-        while not traindone:
-            if stepcount in self.params["augment"].keys():
-                train_data.change_augment(self.params["augment"][stepcount])
-            for i,(ims,masks) in enumerate(loader):
-                if self.cancel:
-                    self.quit()
-                    return
-                if self.params["2D"]:
-                    ims=ims[:,:,:,:,0]
-                    masks=masks[:,:,:,0]
-                ims=ims.to(device=self.device,dtype=torch.float32)
-                masks=masks.to(device=self.device,dtype=torch.long)
-                res=self.net(ims)
-                loss=nntools.selective_ce(res,masks)
-                opt.zero_grad()
-                loss.backward()
-                opt.step()
-
-                stepcount+=1
-                self.state[1]=int(100*(stepcount/n_steps))
-                print(loss.item())
-                f.write(str(stepcount)+str(loss.item())+"\n")
-                if stepcount==n_steps:
-                    traindone=True
-                    break
-        f.close()
-
-        if self.params["Targeted"]:
-            self.net.eval()
-            self.state=["Making Targeted Augmentation",0]
-            for t in range(1,T+1):
-                if self.cancel:
-                    self.quit()
-                    return
-                time.sleep(0.001)
-                self.state[1]=int(100*t/T)
+            train_data=NNtools.TrainDataset(folpath=self.folpath,shape=(C,W,H,D))
+            loader=torch.utils.data.DataLoader(train_data, batch_size=self.params["batch_size"],shuffle=True, num_workers=0,pin_memory=True)
+            opt=torch.optim.Adam(self.net.parameters(),lr=self.params["lr"])
+            n_steps=self.params["n_steps"]
 
             self.net.train()
-            self.state=["Re Training Network",0]
-            for t in range(1,T+1):
-                if self.cancel:
-                    self.quit()
-                    return
-                time.sleep(0.001)
-                self.state[1]=int(100*t/T)
+            traindone=False
+            stepcount=0
+            #f=open(os.path.join(self.folpath,"log","loss.txt"),"w")
+            while not traindone:
+                if stepcount in self.params["augment"].keys():
+                    train_data.change_augment(self.params["augment"][stepcount])
+                for i,(ims,masks) in enumerate(loader):
+                    if self.cancel:
+                        self.quit()
+                        return
+                    if self.params["2D"]:
+                        ims=ims[:,:,:,:,0]
+                        masks=masks[:,:,:,0]
+                    ims=ims.to(device=self.device,dtype=torch.float32)
+                    masks=masks.to(device=self.device,dtype=torch.long)
+                    res=self.net(ims)
+                    loss=NNtools.selective_ce(res,masks)
+                    opt.zero_grad()
+                    loss.backward()
+                    opt.step()
 
-        self.state=["Extracting Points",0]
-        ptss=np.full((T,N_points+1,3),np.nan)
-        if self.params["2D"]:
-            ptss[:,1:,2]=0
-            grid=grid[:2,:,:,0]
-            if self.params["weight_channel"] is None:
-                weight=np.ones(grid.shape[1:])
-        data=nntools.EvalDataset(folpath=self.folpath,channels=channels,T=T,maxz=False)
-        self.net.eval()
-        with torch.no_grad():
-            for i in range(T):
-                if self.cancel:
-                    self.quit()
-                    return
-                im=data[i].to(device=self.device,dtype=torch.float32)
-                if self.params["2D"]:
-                    im=im[:,:,:,0]
-                maskpred=torch.argmax(self.net(im.unsqueeze(0))[0],dim=0).cpu().detach().numpy()
+                    stepcount+=1
+                    self.state[1]=int(100*(stepcount/n_steps))
+                    #print(stepcount,loss.item())
+                    #f.write(str(stepcount)+str(loss.item())+"\n")
+                    if stepcount==n_steps:
+                        traindone=True
+                        break
+            #f.close()
+            
+        #Add TA frames and train
+        print("TA start")
+        if self.params["Targeted"]:
+            #Make TA frames
+            if True:
+                self.ta_path=os.path.join(self.folpath,"TA")
+                os.makedirs(self.ta_path)
+                os.makedirs(os.path.join(self.ta_path,"frames"))
+                os.makedirs(os.path.join(self.ta_path,"masks"))
+                
+                traininds=np.array(train_data.indlist)
+                for train_ind in traininds:
+                    frame_name_from=os.path.join(self.folpath,"frames",str(train_ind)+".pt")
+                    frame_name_to=os.path.join(self.ta_path,"frames",str(train_ind)+".pt")
+                    shutil.copyfile(frame_name_from,frame_name_to)
+                    
+                    mask_name_from=os.path.join(self.folpath,"masks",str(train_ind)+".pt")
+                    mask_name_to=os.path.join(self.ta_path,"masks",str(train_ind)+".pt")
+                    shutil.copyfile(mask_name_from,mask_name_to)
+                    
+                print("making augs")
+                distmat=self.dataset.get_data("distmat")
+                additional_inds=NNtools.get_additional_inds(traininds,distmat)
+                data=NNtools.EvalDataset(folpath=self.folpath,T=T,mask=True,maxz=False)
+                
+                n_added=0
+                count=0
+                while True:
+                    if count==len(additional_inds):
+                        break
+                    i=additional_inds[count]
+                    i_parent=traininds[np.argmin(distmat[traininds,i])]
+                    print("child:",i,"parent:",i_parent)
+                    count+=1
+                    
+                    #getting points
+                    with torch.no_grad():
+                        im=data[i][0].to(device=self.device,dtype=torch.float32)
+                        maskpred=torch.argmax(self.net(im.unsqueeze(0))[0],dim=0).cpu().detach().numpy()
+                        if self.params["weight_channel"] is None:
+                            pts_dict=NNtools.get_pts_dict(maskpred,grid,weight=np.ones(grid.shape[1:]).astype(np.float32))
+                        else:
+                            pts_dict=NNtools.get_pts_dict(maskpred,grid,weight=im[self.params["weight_channel"]].cpu().detach().numpy())
+                    pts_child=np.full((N_points+1,3),np.nan)
+                    for label,coord in pts_dict.items():
+                        pts_child[labels_to_inds[label]]=coord
+                    pts_parent=points[i_parent]
+                    
+                    print("Points got",pts_child.shape,pts_parent.shape)
+                    
+                    deformation,msg=Deformation.get_deformation(ptfrom=pts_parent,ptto=pts_child,sh=(W,H,D),scale=self.params["pixel_scale"],device=self.device,**self.params["deformparams"])
+                    if msg!="success":
+                        print("Deformation failed")
+                        continue
+                    print("Deformation got")
+                    if success:
+                        im,mask=data[i_parent]
+                        im=im.unsqueeze(0).to(device=self.device,dtype=torch.float32)
+                        mask=mask.unsqueeze(0).to(device=self.device,dtype=torch.long)
+                        im,mask=Deformation.deform(sh,deformation,im,mask=mask)
+                        im=torch.clip(im[0]*255,0,255).to(device="cpu",dtype=torch.uint8)
+                        mask=mask[0].to(device="cpu",dtype=torch.uint8)
+                        
+                        ind=T+i
+                        torch.save(im,os.path.join(self.ta_path,"frames",str(ind)+".pt"))
+                        torch.save(mask,os.path.join(self.ta_path,"masks",str(ind)+".pt"))
+                        n_added+=1
+                    if n_added==self.params["num_additional"]:
+                        break
 
+            print("training")
+            #Train with TA frames
+            if True:
+                train_data=NNtools.TrainDataset(folpath=self.ta_path,shape=(C,W,H,D))
+                train_data.change_augment("aff")
+                loader=torch.utils.data.DataLoader(train_data, batch_size=self.params["batch_size"],shuffle=True, num_workers=0,pin_memory=True)
+                opt=torch.optim.Adam(self.net.parameters(),lr=self.params["lr"])
+
+                self.net.train()
+                traindone=False
+                stepcount=0
+                while not traindone:
+                    for i,(ims,masks) in enumerate(loader):
+                        if self.cancel:
+                            self.quit()
+                            return
+                        if self.params["2D"]:
+                            ims=ims[:,:,:,:,0]
+                            masks=masks[:,:,:,0]
+                        ims=ims.to(device=self.device,dtype=torch.float32)
+                        masks=masks.to(device=self.device,dtype=torch.long)
+                        res=self.net(ims)
+                        loss=NNtools.selective_ce(res,masks)
+                        opt.zero_grad()
+                        loss.backward()
+                        opt.step()
+
+                    stepcount+=1
+                    self.state[1]=int(100*(stepcount/n_steps))
+                    if stepcount==n_steps:
+                        traindone=True
+                        break
+                
+        #extract points and save
+        if True:
+            self.state=["Extracting Points",0]
+            ptss=np.full((T,N_points+1,3),np.nan)
+            if self.params["2D"]:
+                grid=grid[:2,:,:,0]
                 if self.params["weight_channel"] is None:
-                    pts_dict=nntools.get_pts_dict(maskpred,grid,weight=weight)
-                else:
-                    im=im.cpu().detach().numpy()
-                    pts_dict=nntools.get_pts_dict(maskpred,grid,weight=im[self.params["weight_channel"]])
-                #print(pts_dict)
-                if self.params["2D"]:
-                    for label,coord in pts_dict.items():
-                        ptss[i,label,:2]=coord
-                else:
-                    for label,coord in pts_dict.items():
-                        ptss[i,label]=coord
-                self.state[1]=int(100*((i+1)/T))
-        ptss[:,0,:]=np.nan
+                    weight=np.ones(grid.shape[1:]).astype(np.float32)
+            else:
+                if self.params["weight_channel"] is None:
+                    weight=np.ones(grid.shape[1:]).astype(np.float32)
+            data=NNtools.EvalDataset(folpath=self.folpath,T=T,maxz=False)
+            
+            self.net.eval()
+            with torch.no_grad():
+                for i in range(T):
+                    if self.cancel:
+                        self.quit()
+                        return
+                    im=data[i].to(device=self.device,dtype=torch.float32)
+                    if self.params["2D"]:
+                        im=im[:,:,:,0]
+                    maskpred=torch.argmax(self.net(im.unsqueeze(0))[0],dim=0).cpu().detach().numpy()
 
-        self.dataset.set_data("helper_NN",ptss,overwrite=True)
+                    if self.params["weight_channel"] is None:
+                        pts_dict=NNtools.get_pts_dict(maskpred,grid,weight=weight)
+                    else:
+                        im=im.cpu().detach().numpy()
+                        pts_dict=NNtools.get_pts_dict(maskpred,grid,weight=im[self.params["weight_channel"]])
+                    if self.params["2D"]:
+                        for label,coord in pts_dict.items():
+                            ptss[i,label,:2]=coord
+                            ptss[i,label,2]=0
+                    else:
+                        for label,coord in pts_dict.items():
+                            ptss[i,label]=coord
+                    self.state[1]=int(100*((i+1)/T))
+            ptss[:,0,:]=np.nan
+
+            self.dataset.set_data("helper_NN",ptss,overwrite=True)
+            
         self.dataset.close()
-        shutil.rmtree(self.folpath)
+        #shutil.rmtree(self.folpath)
         self.state="Done"
 
         #2D=True;augment={0:"aff_cut",500:"aff"};n_steps=1000;weight_channel=0
@@ -542,7 +655,6 @@ class InvDistInterp():
                 ptss[t,1+i,:2]=points_ref[i]+vec
                 ptss[t,1+i,2]=0
 
-
             self.state[1]=int(100*((t+1)/T))
         self.dataset.set_data("helper_InvDistInterp",ptss,overwrite=True)
         self.dataset.close()
@@ -578,5 +690,5 @@ for name in methodnames:
 if __name__=="__main__":
     import sys
     fp=sys.argv[1]
-    method=NNClass({"Targeted":True,"n_epoch_posture":2,"batch_size_posture":1})
+    method=NN("Targeted=True")
     method.run(fp)

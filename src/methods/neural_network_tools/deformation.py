@@ -92,7 +92,7 @@ class FourierLowK(nn.Module):
     def to(self,**kwargs):
         self.feed_ind=self.feed_ind.to(**kwargs)
 
-def get_deformation(ptfrom,ptto,sh,k_cut_dimless=2.5,lr=0.1,iterations=200,lambda_div=1,scale=(1,1,1),at_least=4,device="cpu",verbose=False,return_losses=False):
+def get_deformation(ptfrom,ptto,sh,k_cut_dimless=2.5,lr=0.1,iterations=200,lambda_div=1,scale=(1,1,1),at_least=5,device="cpu",verbose=False,return_losses=False):
     vecs=(ptto-ptfrom)
     valids=np.nonzero(np.all(np.isnan(vecs)==0,axis=1))[0]
     if len(valids)<at_least:
@@ -100,7 +100,6 @@ def get_deformation(ptfrom,ptto,sh,k_cut_dimless=2.5,lr=0.1,iterations=200,lambd
     vecs=vecs[valids][:,:]
     locs=ptfrom[valids][:,:]
     W,H,D=sh
-
 
     f=FourierLowK((W,H,D),k_cut_dimless=k_cut_dimless)
 
@@ -137,3 +136,15 @@ def get_deformation(ptfrom,ptto,sh,k_cut_dimless=2.5,lr=0.1,iterations=200,lambd
     if return_losses:
         return deformation,losses,"success"
     return deformation,"success"
+
+def deform(sh,deformation,frame,mask=None):
+    W,H,D=sh
+    grid=torch.stack(torch.meshgrid(*[torch.arange(s) for s in (W,H,D)],indexing="ij"),dim=0).to(dtype=torch.float32,device=deformation.device)
+    normten=(torch.tensor([W,H,D])[None,:,None,None,None]-1).to(dtype=torch.float32,device=deformation.device)
+    moved=(2*((grid[None]-deformation)/normten)-1).to(dtype=torch.float32,device=deformation.device)
+    moved=moved.permute(0,2,3,4,1)[...,[2,1,0]]
+    fr_aug=torch.nn.functional.grid_sample(frame.to(torch.float32),moved.repeat(frame.size(0),1,1,1,1), mode='bilinear', padding_mode="border",align_corners=True)
+    if mask is not None:
+        mask_aug=torch.nn.functional.grid_sample(mask.unsqueeze(1).to(torch.float32),moved.repeat(mask.size(0),1,1,1,1), mode='nearest', padding_mode='zeros',align_corners=True)[:,0].to(torch.long)
+        return fr_aug,mask_aug
+    return fr_aug

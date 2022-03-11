@@ -149,7 +149,7 @@ class Dataset:
         if self.suffix=="h5":
             key=name
             if key not in self.data.keys():
-                print("Data not present, bug")
+                print("Data not present")
                 return None
             else:
                 return np.array(self.data[key])
@@ -207,3 +207,8 @@ class Dataset:
         if self.suffix=="h5":
             if name in self.data.keys():
                 del self.data[name]
+                
+    def exists(self,name):
+        assert self.data is not None, "file not open"
+        if self.suffix=="h5":
+            return (name in self.data.keys())
