@@ -17,14 +17,14 @@ import matplotlib.pyplot as plt
 class NN():
     default_params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,
     "lr":0.01,
-    "n_steps":2,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
+    "n_steps":3000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
     "weight_channel":None,
-    
+
     "Targeted":False,
-    "recalcdistmat":True,"n_steps_posture":5,"batch_size_posture":16,"umap_dim":None,
+    "recalcdistmat":True,"n_steps_posture":3000,"batch_size_posture":16,"umap_dim":None,
     "deformparams":{"k_cut_dimless":2.5,"lr":0.1,"iterations":200,"lambda_div":1,"at_least":5},"num_additional":80,
     "pixel_scale":None,
-    
+
     "DeformAug":False,
     "deformaugparams":{"epsilon":1e-10}
     }
@@ -78,7 +78,7 @@ class NN():
             self.params["pixel_scale"]=self.data_info["pixel_scale"]
         else:
             self.params["pixel_scale"]=(1,1,1)
-        
+
         #make files
         if True:
             self.state=["Making Files",0]
@@ -114,7 +114,7 @@ class NN():
                     mask=torch.tensor(maskpts.reshape(W,H,D),dtype=torch.uint8)
                     torch.save(mask,os.path.join(self.folpath,"masks",str(t)+".pt"))
                 self.state[1]=int(100*(t+1)/T)
-        
+
         #make posture space if TA
         if self.params["Targeted"] and ((not self.dataset.exists("distmat")) or self.params["recalcdistmat"]):
             self.state=["Embedding Posture Space Training",0]
@@ -126,7 +126,7 @@ class NN():
             loader=torch.utils.data.DataLoader(data, batch_size=self.params["batch_size_posture"],shuffle=True,num_workers=0,pin_memory=True)
             opt=torch.optim.Adam(self.encnet.parameters(),lr=self.params["lr"])
             n_steps_posture=self.params["n_steps_posture"]
-            
+
             self.encnet.train()
             traindone=False
             stepcount=0
@@ -175,7 +175,7 @@ class NN():
                 vecs=u_map.fit_transform(vecs)
             distmat=sspat.distance_matrix(vecs,vecs).astype(np.float32)
             self.dataset.set_data("distmat",distmat,overwrite=True)
-            
+
         #train network
         if True:
             self.state=["Training Network",0]
@@ -220,42 +220,44 @@ class NN():
                         traindone=True
                         break
             #f.close()
-            
+
         #Add TA frames and train
-        print("TA start")
+        #print("TA start")
         if self.params["Targeted"]:
             #Make TA frames
             if True:
+                self.state=["Making TA",0]
                 self.ta_path=os.path.join(self.folpath,"TA")
                 os.makedirs(self.ta_path)
                 os.makedirs(os.path.join(self.ta_path,"frames"))
                 os.makedirs(os.path.join(self.ta_path,"masks"))
-                
+
                 traininds=np.array(train_data.indlist)
                 for train_ind in traininds:
                     frame_name_from=os.path.join(self.folpath,"frames",str(train_ind)+".pt")
                     frame_name_to=os.path.join(self.ta_path,"frames",str(train_ind)+".pt")
                     shutil.copyfile(frame_name_from,frame_name_to)
-                    
+
                     mask_name_from=os.path.join(self.folpath,"masks",str(train_ind)+".pt")
                     mask_name_to=os.path.join(self.ta_path,"masks",str(train_ind)+".pt")
                     shutil.copyfile(mask_name_from,mask_name_to)
-                    
-                print("making augs")
+
+                #print("making augs")
                 distmat=self.dataset.get_data("distmat")
                 additional_inds=NNtools.get_additional_inds(traininds,distmat)
                 data=NNtools.EvalDataset(folpath=self.folpath,T=T,mask=True,maxz=False)
-                
+
                 n_added=0
                 count=0
                 while True:
+                    self.state[1]=int(100*((n_added)/self.params["num_additional"]))
                     if count==len(additional_inds):
                         break
                     i=additional_inds[count]
                     i_parent=traininds[np.argmin(distmat[traininds,i])]
-                    print("child:",i,"parent:",i_parent)
+                    #print("child:",i,"parent:",i_parent)
                     count+=1
-                    
+
                     #getting points
                     with torch.no_grad():
                         im=data[i][0].to(device=self.device,dtype=torch.float32)
@@ -268,32 +270,32 @@ class NN():
                     for label,coord in pts_dict.items():
                         pts_child[labels_to_inds[label]]=coord
                     pts_parent=points[i_parent]
-                    
-                    print("Points got",pts_child.shape,pts_parent.shape)
-                    
+
+                    #print("Points got",pts_child.shape,pts_parent.shape)
+
                     deformation,msg=Deformation.get_deformation(ptfrom=pts_parent,ptto=pts_child,sh=(W,H,D),scale=self.params["pixel_scale"],device=self.device,**self.params["deformparams"])
                     if msg!="success":
-                        print("Deformation failed")
+                        #print("Deformation failed")
                         continue
-                    print("Deformation got")
-                    if success:
-                        im,mask=data[i_parent]
-                        im=im.unsqueeze(0).to(device=self.device,dtype=torch.float32)
-                        mask=mask.unsqueeze(0).to(device=self.device,dtype=torch.long)
-                        im,mask=Deformation.deform(sh,deformation,im,mask=mask)
-                        im=torch.clip(im[0]*255,0,255).to(device="cpu",dtype=torch.uint8)
-                        mask=mask[0].to(device="cpu",dtype=torch.uint8)
-                        
-                        ind=T+i
-                        torch.save(im,os.path.join(self.ta_path,"frames",str(ind)+".pt"))
-                        torch.save(mask,os.path.join(self.ta_path,"masks",str(ind)+".pt"))
-                        n_added+=1
+                    #print("Deformation got")
+                    im,mask=data[i_parent]
+                    im=im.unsqueeze(0).to(device=self.device,dtype=torch.float32)
+                    mask=mask.unsqueeze(0).to(device=self.device,dtype=torch.long)
+                    im,mask=Deformation.deform((W,H,D),deformation,im,mask=mask)
+                    im=torch.clip(im[0]*255,0,255).to(device="cpu",dtype=torch.uint8)
+                    mask=mask[0].to(device="cpu",dtype=torch.uint8)
+
+                    ind=T+i
+                    torch.save(im,os.path.join(self.ta_path,"frames",str(ind)+".pt"))
+                    torch.save(mask,os.path.join(self.ta_path,"masks",str(ind)+".pt"))
+                    n_added+=1
                     if n_added==self.params["num_additional"]:
                         break
 
-            print("training")
+            #print("training")
             #Train with TA frames
             if True:
+                self.state=["Training TA",0]
                 train_data=NNtools.TrainDataset(folpath=self.ta_path,shape=(C,W,H,D))
                 train_data.change_augment("aff")
                 loader=torch.utils.data.DataLoader(train_data, batch_size=self.params["batch_size"],shuffle=True, num_workers=0,pin_memory=True)
@@ -323,7 +325,7 @@ class NN():
                     if stepcount==n_steps:
                         traindone=True
                         break
-                
+
         #extract points and save
         if True:
             self.state=["Extracting Points",0]
@@ -336,7 +338,7 @@ class NN():
                 if self.params["weight_channel"] is None:
                     weight=np.ones(grid.shape[1:]).astype(np.float32)
             data=NNtools.EvalDataset(folpath=self.folpath,T=T,maxz=False)
-            
+
             self.net.eval()
             with torch.no_grad():
                 for i in range(T):
@@ -364,12 +366,10 @@ class NN():
             ptss[:,0,:]=np.nan
 
             self.dataset.set_data("helper_NN",ptss,overwrite=True)
-            
-        self.dataset.close()
-        #shutil.rmtree(self.folpath)
-        self.state="Done"
 
-        #2D=True;augment={0:"aff_cut",500:"aff"};n_steps=1000;weight_channel=0
+        self.dataset.close()
+        shutil.rmtree(self.folpath)
+        self.state="Done"
 
     def quit(self):
         shutil.rmtree(self.folpath)
@@ -690,5 +690,5 @@ for name in methodnames:
 if __name__=="__main__":
     import sys
     fp=sys.argv[1]
-    method=NN("Targeted=True")
+    method=NN("Targeted=True;num_additional=3")
     method.run(fp)

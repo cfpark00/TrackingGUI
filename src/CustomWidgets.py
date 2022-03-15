@@ -440,7 +440,7 @@ class TrackTab(QWidget):
         self.grid=QGridLayout()
 
         row=0
-        self.grid.addWidget(QLabel("Select Method"),row,0)
+        self.grid.addWidget(QLabel("Select Method:"),row,0)
         row+=1
 
         self.combobox=QComboBox()
@@ -452,9 +452,21 @@ class TrackTab(QWidget):
         self.grid.addWidget(self.combobox,row,0)
         row+=1
 
+        self.grid.addWidget(QLabel("Parameters:"),row,0)
+        row+=1
+
+        scroll=QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        lay = QVBoxLayout()
         self.help=QLabel()
         self.help.setWordWrap(True)
-        self.grid.addWidget(self.help,row,0)
+        self.help.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        lay.addWidget(self.help)
+        content.setLayout(lay)
+        scroll.setWidget(content)
+
+        self.grid.addWidget(scroll,row,0)
         row+=1
 
         self.param_edit=QLineEdit()

@@ -139,7 +139,7 @@ def get_deformation(ptfrom,ptto,sh,k_cut_dimless=2.5,lr=0.1,iterations=200,lambd
 
 def deform(sh,deformation,frame,mask=None):
     W,H,D=sh
-    grid=torch.stack(torch.meshgrid(*[torch.arange(s) for s in (W,H,D)],indexing="ij"),dim=0).to(dtype=torch.float32,device=deformation.device)
+    grid=torch.stack(torch.meshgrid(*[torch.arange(s) for s in (W,H,D)]),dim=0).to(dtype=torch.float32,device=deformation.device)
     normten=(torch.tensor([W,H,D])[None,:,None,None,None]-1).to(dtype=torch.float32,device=deformation.device)
     moved=(2*((grid[None]-deformation)/normten)-1).to(dtype=torch.float32,device=deformation.device)
     moved=moved.permute(0,2,3,4,1)[...,[2,1,0]]
