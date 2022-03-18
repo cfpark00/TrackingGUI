@@ -56,7 +56,7 @@ def animate(i):
     scat1.set_offsets(points[i,existing,:2])
     return im1,scat1
 
-anim = FuncAnimation(fig, animate,frames=100, interval=100, blit=True)
+anim = FuncAnimation(fig, animate,frames=data_info["T"], interval=100, blit=True)
 anim.save(file_to_path)#data_info["T"]
 
 dataset.close()

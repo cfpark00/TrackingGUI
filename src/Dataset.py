@@ -68,7 +68,7 @@ class Dataset:
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
             return dict(self.data.attrs)
-    
+
     def update_data_info(self,dict):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
@@ -79,7 +79,7 @@ class Dataset:
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
             if "points" not in self.data.keys():
-                points=np.full((self.data.attrs["T"],self.data.attrs["N_points"]+n_add+1,3),np.nan,dtype=np.float32)
+                points=np.full((self.data.attrs["T"],self.data.attrs["N_points"]+1,3),np.nan,dtype=np.float32)
                 self.set_points(points)
             return np.array(self.data["points"])
 
@@ -207,7 +207,7 @@ class Dataset:
         if self.suffix=="h5":
             if name in self.data.keys():
                 del self.data[name]
-                
+
     def exists(self,name):
         assert self.data is not None, "file not open"
         if self.suffix=="h5":

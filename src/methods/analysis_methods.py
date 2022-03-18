@@ -12,7 +12,7 @@ class GaussianIntegralClass():
     def __init__(self,params):
         self.state=""
         self.cancel=False
-        
+
         params_dict={}
         try:
             for txt in params.strip().split(";"):
@@ -21,10 +21,10 @@ class GaussianIntegralClass():
                 key,val=txt.split("=")
                 params_dict[key]=eval(val)
         except:
-            assert False, "Parameter Parse Failure"   
+            assert False, "Parameter Parse Failure"
         self.params={"sigma_x":1.5,"sigma_y":1.5,"sigma_z":0.4,"ker_x":7,"ker_y":7,"ker_z":1}
         self.params.update(params_dict)
-        
+
         arrs=[np.arange(self.params[key])-self.params[key]//2 for key in ["ker_x","ker_y","ker_z"]]
         x,y,z=np.meshgrid(*arrs,indexing="ij")
         kernel=np.exp(-0.5*((x/self.params["sigma_x"])**2+(y/self.params["sigma_y"])**2+(z/self.params["sigma_z"])**2))
@@ -32,7 +32,7 @@ class GaussianIntegralClass():
         self.kernel=kernel
         self.coord_grid=np.stack([x,y,z],axis=0)
 
-        
+
     def run(self,file_path):
         dataset=Dataset(file_path)
         dataset.open()
@@ -59,7 +59,8 @@ class GaussianIntegralClass():
 
         dataset.set_data("GaussianIntegral",intensities,overwrite=True)
         if self.C==2:
-            dataset.set_data("signal_GaussianIntegral",intensities[:,:,1]/intensities[:,:,0],overwrite=True)
+            intensity=np.divide(intensities[:,:,1],intensities[:,:,0],where=intensities[:,:,0]!=0,out=np.full_like(intensities[:,:,0],np.nan))
+            dataset.set_data("signal_GaussianIntegral",intensity,overwrite=True)
         else:
             dataset.set_data("signal_GaussianIntegral",intensities[:,:,0],overwrite=True)
         dataset.close()
