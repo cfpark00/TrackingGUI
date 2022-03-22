@@ -180,6 +180,7 @@ class Dataset:
         assert self.data is not None, "file not open"
         if self.suffix=="h5":
             if  "points" not in self.data.keys():
+                self.data.attrs["N_points"]=n_add
                 points=np.full((self.data.attrs["T"],self.data.attrs["N_points"]+n_add+1,3),np.nan,dtype=np.float32)
             else:
                 points=np.array(self.data["points"])
@@ -188,7 +189,7 @@ class Dataset:
 
             ds=self.data.create_dataset("points",shape=points.shape,dtype=points.dtype)
             ds[...]=points
-            self.data.attrs["N_points"]=self.data.attrs["N_points"]+n_add
+            self.data.attrs["N_points"]=points.shape[1]-1
 
     def set_data(self,name,data,compression="lzf",overwrite=False):
         assert self.data is not None, "file not open"
