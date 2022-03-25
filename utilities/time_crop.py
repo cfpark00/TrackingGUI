@@ -42,23 +42,24 @@ if not overwrite:
     if os.path.exists(file_to_path):
         print(file_to_path,"already present")
         sys.exit()
-    shutil.copyfile(file_path,file_to_path)
+    #shutil.copyfile(file_path,file_to_path)
     new_dataset=Dataset(file_to_path)
+    new_dataset.make()
     new_dataset.open()
 
-for t in range(ti,tf+1):
+for t in tqdm(range(ti,tf+1)):
     if overwrite:
         frame=dataset.get_frame(t-1)
         dataset.set_frame(t-ti,frame,shape_change=False)
     else:
         frame=dataset.get_frame(t-1)
         new_dataset.set_frame(t-ti,frame,shape_change=False)
-for t in range(tf+1,data_info["T"]+1):
+for t in tqdm(range(tf+1,data_info["T"]+1)):
     if overwrite:
         dataset.remove(str(t-1)+"/frame")
 
 T=tf-ti+1
-new_data_info={"T":T}
+new_data_info=data_info.update({"T":T})
 if not overwrite:
     new_dataset.update_data_info(new_data_info)
     new_dataset.close()
@@ -66,6 +67,3 @@ if not overwrite:
 else:
     dataset.update_data_info(new_data_info)
     dataset.close()
-    
-    
-    

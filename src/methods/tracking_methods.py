@@ -15,18 +15,16 @@ import scipy.spatial as sspat
 import matplotlib.pyplot as plt
 
 class NN():
-    default_params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,
+    default_params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,"pixel_scale":None,
+
     "lr":0.01,
     "n_steps":3000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
     "weight_channel":None,
 
     "Targeted":False,
+    "PreTargeted":False,
     "recalcdistmat":True,"n_steps_posture":3000,"batch_size_posture":16,"umap_dim":None,
-    "deformparams":{"k_cut_dimless":2.5,"lr":0.1,"iterations":200,"lambda_div":1,"at_least":5},"num_additional":80,
-    "pixel_scale":None,
-
-    "DeformAug":False,
-    "deformaugparams":{"epsilon":1e-10}
+    "deformparams":{"forward_def":False,"k_cut_dimless":2.5,"lr":0.1,"iterations":200,"lambda_div":1,"at_least":8},"num_additional":80,
     }
     help=str(default_params)
     def __init__(self,params):
@@ -185,7 +183,7 @@ class NN():
                 self.net=Networks.ThreeDCN(n_channels=n_channels,num_classes=N_labels)
             self.net.to(device=self.device,dtype=torch.float32)
 
-            train_data=NNtools.TrainDataset(folpath=self.folpath,shape=(C,W,H,D))
+            train_data=NNtools.TrainDataset(folpath=self.folpath,shape=(n_channels,W,H,D))
             loader=torch.utils.data.DataLoader(train_data, batch_size=self.params["batch_size"],shuffle=True, num_workers=0,pin_memory=True)
             opt=torch.optim.Adam(self.net.parameters(),lr=self.params["lr"])
             n_steps=self.params["n_steps"]
@@ -273,17 +271,23 @@ class NN():
 
                     #print("Points got",pts_child.shape,pts_parent.shape)
 
-                    deformation,msg=Deformation.get_deformation(ptfrom=pts_parent,ptto=pts_child,sh=(W,H,D),scale=self.params["pixel_scale"],device=self.device,**self.params["deformparams"])
+                    if self.params["deformparams"]["forward_def"]:
+                        deformation,msg=Deformation.get_deformation_lowk(ptfrom=pts_parent,ptto=pts_child,sh=(W,H,D),scale=self.params["pixel_scale"],device=self.device,**self.params["deformparams"])
+                    else:
+                        deformation,msg=Deformation.get_deformation_lowk(ptfrom=pts_child,ptto=pts_parent,sh=(W,H,D),scale=self.params["pixel_scale"],device=self.device,**self.params["deformparams"])
                     if msg!="success":
                         #print("Deformation failed")
                         continue
                     #print("Deformation got")
                     im,mask=data[i_parent]
-                    im=im.unsqueeze(0).to(device=self.device,dtype=torch.float32)
-                    mask=mask.unsqueeze(0).to(device=self.device,dtype=torch.long)
-                    im,mask=Deformation.deform((W,H,D),deformation,im,mask=mask)
-                    im=torch.clip(im[0]*255,0,255).to(device="cpu",dtype=torch.uint8)
-                    mask=mask[0].to(device="cpu",dtype=torch.uint8)
+                    im=im.to(device=self.device,dtype=torch.float32)
+                    mask=mask.to(device=self.device,dtype=torch.long)
+                    if self.params["deformparams"]["forward_def"]:
+                        im,mask=Deformation.deform(im,-deformation,mask=mask)
+                    else:
+                        im,mask=Deformation.deform(im,deformation,mask=mask)
+                    im=torch.clip(im*255,0,255).to(device="cpu",dtype=torch.uint8)
+                    mask=mask.to(device="cpu",dtype=torch.uint8)
 
                     ind=T+i
                     torch.save(im,os.path.join(self.ta_path,"frames",str(ind)+".pt"))
@@ -296,7 +300,7 @@ class NN():
             #Train with TA frames
             if True:
                 self.state=["Training TA",0]
-                train_data=NNtools.TrainDataset(folpath=self.ta_path,shape=(C,W,H,D))
+                train_data=NNtools.TrainDataset(folpath=self.ta_path,shape=(n_channels,W,H,D))
                 train_data.change_augment("aff")
                 loader=torch.utils.data.DataLoader(train_data, batch_size=self.params["batch_size"],shuffle=True, num_workers=0,pin_memory=True)
                 opt=torch.optim.Adam(self.net.parameters(),lr=self.params["lr"])
@@ -320,11 +324,11 @@ class NN():
                         loss.backward()
                         opt.step()
 
-                    stepcount+=1
-                    self.state[1]=int(100*(stepcount/n_steps))
-                    if stepcount==n_steps:
-                        traindone=True
-                        break
+                        stepcount+=1
+                        self.state[1]=int(100*(stepcount/n_steps))
+                        if stepcount==n_steps:
+                            traindone=True
+                            break
 
         #extract points and save
         if True:

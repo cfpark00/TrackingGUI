@@ -2,10 +2,10 @@ conda create --name TrackingGUI python==3.9.7
 
 conda activate TrackingGUI
 
-conda install numpy scipy pyqtgraph h5py pyqt tqdm
+conda install numpy scipy pyqtgraph h5py pyqt tqdm matplotlib
 
 conda install pytorch torchvision torchaudio -c pytorch
-conda install -c conda-forge albumentations
+pip install albumentations
 pip install connected-components-3d
 
 
