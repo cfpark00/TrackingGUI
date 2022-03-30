@@ -66,6 +66,8 @@ if not inplace:
     shutil.copyfile(file_path,file_to_path)
     new_dataset=Dataset(file_to_path)
     new_dataset.open()
+else:
+    new_dataset=dataset
 
 for t in tqdm(range(data_info["T"])):
     frame=dataset.get_frame(t)

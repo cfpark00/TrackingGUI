@@ -14,4 +14,4 @@ z_size_scale=3
 pen_width=2
 gt_color=255,255,255
 helper_color=235,171,83
-click_distance=4
+click_distance=5

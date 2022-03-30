@@ -17,6 +17,8 @@ class GUI():
         self.settings=settings
         self.dataset=Dataset(file_path)
 
+        self.mode=self.settings["mode"]
+
         self.close=False
         self.assigned_points={}
         self.key_index={}
@@ -153,7 +155,10 @@ class GUI():
                 if dists[am]<self.click_distance:
                     self.respond("highlight",indices[am])
             else:
-                print("coord:",val[1],val[2],self.z)
+                if self.mode=="onclick":
+                    print("tracking from time="+str(self.time)+" x,y,z=",val[1],val[2],self.z)
+                else:
+                    print("coord:",val[1],val[2],self.z)
         elif key=="fig_scroll":
             dz=val/self.scroll_per_z
             self.z_float=np.clip(self.z_float+dz,-1.5,self.D-0.5)

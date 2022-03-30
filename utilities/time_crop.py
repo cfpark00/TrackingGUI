@@ -59,11 +59,11 @@ for t in tqdm(range(tf+1,data_info["T"]+1)):
         dataset.remove(str(t-1)+"/frame")
 
 T=tf-ti+1
-new_data_info=data_info.update({"T":T})
+data_info.update({"T":T})
 if not overwrite:
-    new_dataset.update_data_info(new_data_info)
+    new_dataset.update_data_info(data_info)
     new_dataset.close()
     dataset.close()
 else:
-    dataset.update_data_info(new_data_info)
+    dataset.update_data_info(data_info)
     dataset.close()

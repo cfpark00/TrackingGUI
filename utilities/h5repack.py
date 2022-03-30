@@ -1,4 +1,5 @@
 import h5py
+import os
 
 def repack(h5fn):
     h5=h5py.File(h5fn,"r")
@@ -11,3 +12,7 @@ def repack(h5fn):
     h5new.close()
     os.remove(h5fn)
     os.rename(h5fn+"_temp",h5fn)
+
+if __name__=="__main__":
+    import sys
+    repack(sys.argv[1])

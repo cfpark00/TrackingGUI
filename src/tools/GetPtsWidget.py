@@ -29,7 +29,7 @@ class FigWidget(pg.PlotWidget,QGraphicsItem):
 
     def mouseclick(self,event):
         pos=self.plotItem.vb.mapSceneToView(event.scenePos())
-        print("sending",self.id,pos.x()-0.5,pos.y()-0.5)
+        #print("sending",self.id,pos.x()-0.5,pos.y()-0.5)
         self.parent.receive_pt(self.id,pos.x()-0.5,pos.y()-0.5)
 
     def enterEvent(self, QEvent):
@@ -62,9 +62,9 @@ class GetPtsWidget(QDialog):
         cancelbut.clicked.connect(self.close)
         cancelbut.setStyleSheet("background-color: red;")
         self.Ims={}
-        self.Ims["from"]=FigWidget("from","Red (From)",imfrom,self)
+        self.Ims["from"]=FigWidget("from","From",imfrom,self)
         lay.addWidget(self.Ims["from"],0,0)
-        self.Ims["to"]=FigWidget("to","Green (To)",imto,self)
+        self.Ims["to"]=FigWidget("to","To",imto,self)
         lay.addWidget(self.Ims["to"],0,1)
         lay.addWidget(savebut,1,0)
         lay.addWidget(cancelbut,1,1)
