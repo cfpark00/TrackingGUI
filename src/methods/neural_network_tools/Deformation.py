@@ -92,7 +92,7 @@ class FourierLowK(nn.Module):
     def to(self,**kwargs):
         self.feed_ind=self.feed_ind.to(**kwargs)
 
-def get_deformation_lowk(ptfrom,ptto,sh,k_cut_dimless=2.5,lr=0.1,iterations=200,frac=0.3,lambda_div=1,scale=(1,1,1),at_least=8,device="cpu",verbose=False,return_losses=False,**kwargs):
+def get_deformation_lowk(ptfrom,ptto,sh,k_cut_dimless=2.5,lr=0.1,iterations=200,frac=0.5,lambda_div=1,scale=(1,1,1),at_least=8,device="cpu",verbose=False,return_losses=False,**kwargs):
     vecs=(ptto-ptfrom)
     valids=np.nonzero(np.all(np.isnan(vecs)==0,axis=1))[0]
     if len(valids)<at_least:
