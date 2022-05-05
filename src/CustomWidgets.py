@@ -179,6 +179,17 @@ class Annotated3DFig(pg.PlotWidget):
         elif key=="b":
             self.channel_colors[channel-1,2]=val
 
+
+    def print_params(self):
+        for channel in range(self.n_channels):
+            print("Min:",self.levels[channel,0],end=" ")
+            print("Max:",self.levels[channel,1],end=" ")
+            print("Gamma:",self.gammas[channel,],end=" ")
+            print("R:",self.channel_colors[channel,0],end=" ")
+            print("G:",self.channel_colors[channel,1],end=" ")
+            print("B:",self.channel_colors[channel,2])
+
+
     def enterEvent(self,event):
         self.setFocus()
         self.inn=True
@@ -348,6 +359,11 @@ class ViewTab(QWidget):
         max_100gamma=int(float(self.gui.settings["max_gamma"])*100)
 
         row=0
+        self.print_params=QPushButton("Print Params")
+        self.print_params.clicked.connect(lambda x:self.gui.respond("print_view_params"))
+        self.grid.addWidget(self.print_params,row,0,1,3*n_channels)
+        row+=1
+
         self.transpose=QCheckBox("Transpose")
         self.transpose.toggled.connect(lambda x:self.gui.respond("transpose",x))
         self.grid.addWidget(self.transpose,row,0,1,3*n_channels)

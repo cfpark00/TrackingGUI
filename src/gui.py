@@ -163,6 +163,8 @@ class GUI():
             dz=val/self.scroll_per_z
             self.z_float=np.clip(self.z_float+dz,-1.5,self.D-0.5)
             self.update_z()
+        elif key=="print_view_params":
+            self.win.figurewidget.print_params()
         elif key=="view_change":
             self.win.figurewidget.update_params(val)
         elif key=="highlight":

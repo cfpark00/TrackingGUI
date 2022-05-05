@@ -18,13 +18,12 @@ class NN():
     default_params={"min_points":1,"channels":None,"mask_radius":4,"2D":False,"pixel_scale":None,
 
     "lr":0.01,
-    "n_steps":3000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
+    "n_steps":5000,"batch_size":3,"augment":{0:"comp_cut",500:"aff_cut",1000:"aff"},
     "weight_channel":None,
 
     "Targeted":False,
-    "PreTargeted":False,
     "recalcdistmat":True,"n_steps_posture":3000,"batch_size_posture":16,"umap_dim":None,
-    "deformparams":{"forward_def":False,"k_cut_dimless":2.5,"lr":0.1,"iterations":200,"lambda_div":1,"at_least":8},"num_additional":80,
+    "deformparams":{"forward_def":False,"k_cut_dimless":2.5,"lr":0.1,"frac":0.5,"iterations":200,"lambda_div":1,"at_least":8},"num_additional":80,
     }
     help=str(default_params)
     def __init__(self,params):
@@ -368,15 +367,20 @@ class NN():
                             ptss[i,label]=coord
                     self.state[1]=int(100*((i+1)/T))
             ptss[:,0,:]=np.nan
-
-            self.dataset.set_data("helper_NN",ptss,overwrite=True)
+            if self.params["Targeted"]:
+                print("saving as NNTA")
+                self.dataset.set_data("helper_NNTA",ptss,overwrite=True)
+            else:
+                print("saving as NN")
+                self.dataset.set_data("helper_NN",ptss,overwrite=True)
 
         self.dataset.close()
-        shutil.rmtree(self.folpath)
+        #shutil.rmtree(self.folpath)
         self.state="Done"
 
     def quit(self):
-        shutil.rmtree(self.folpath)
+        pass
+        #shutil.rmtree(self.folpath)
 
 class NPS():
     default_params={"anchor_labels":None,"anchor_times":None,"radius":50}
