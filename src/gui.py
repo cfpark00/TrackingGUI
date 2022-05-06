@@ -84,6 +84,24 @@ class GUI():
         elif key=="time_change":
             self.time=val
             self.update_time()
+        elif key=="annotated_tchange":
+            if self.highlighted==0:
+                return
+            annotated=np.nonzero(~np.isnan(self.points[:,self.highlighted,0]))
+            if val==1:
+                inds=annotated[annotated>self.time]
+                if len(inds)==0:
+                    return
+                else:
+                    t_target=np.min(inds)
+            else:
+                inds=annotated[annotated<self.time]
+                if len(inds)==0:
+                    return
+                else:
+                    t_target=np.max(inds)
+            self.time=t_target
+            self.update_time()
         elif key=="update_data":
             if self.close:
                 return
@@ -349,6 +367,16 @@ class Window(QMainWindow):
             for tkey,tdelta in zip(tkeys,tdeltas):
                 short=QShortcut(QKeySequence(tkey), self)
                 short.activated.connect(self.get_dtime_change_func(tdelta))
+
+            next_annotated_keys=self.gui.settings["next_annotated_keys"].split(",")
+            for key,delta in zip(next_annotated_keys,[-1,1]):
+                short=QShortcut(QKeySequence(key), self)
+                short.activated.connect(self.get_next_annotated_tchange_func(delta))
+
+    def get_next_annotated_tchange_func(self,delta):
+        def func():
+            self.gui.respond("annotated_tchange",delta)
+        return func
 
     def get_dtime_change_func(self,tdelta):
         def func():

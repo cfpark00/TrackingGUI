@@ -4,6 +4,7 @@ keys=q,w,e,r,t,y
 keys_colors=41,98,24;235,85,40;249,216,73;117,251,76;117,251,253;0,0,245
 tkeys=n,m
 tdeltas=-1,1
+next_annotated_keys=j,k
 channel_colors=255,0,255;0,255,0
 scroll_per_z=120
 max_gamma=1.3
