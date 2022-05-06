@@ -755,7 +755,7 @@ class DashboardTab(QWidget):
         if self.chunknumber!=chunknumber:
             for i in range(self.chunksize):
                 tt=self.chunksize*chunknumber+i+1
-                self.time_label_buttons[i].setText(str(t) if tt<self.T else "")
+                self.time_label_buttons[i].setText(str(tt) if tt<self.T else "")
             self.chunknumber=chunknumber
 
         self.current_label_button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")
