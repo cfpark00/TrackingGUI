@@ -87,19 +87,18 @@ class GUI():
         elif key=="annotated_tchange":
             if self.highlighted==0:
                 return
-            annotated=np.nonzero(~np.isnan(self.points[:,self.highlighted,0]))[0]
             if val==1:
-                inds=annotated[annotated>self.time]
-                if len(inds)==0:
+                annotated=np.nonzero(~np.isnan(self.points[self.time:,self.highlighted,0]))[0]
+                if len(annotated)==0:
                     return
                 else:
-                    t_target=np.min(inds)+1
+                    t_target=np.min(annotated)+self.time+1
             else:
-                inds=annotated[annotated<self.time]
-                if len(inds)==0:
+                annotated=np.nonzero(~np.isnan(self.points[:self.time-1,self.highlighted,0]))[0]
+                if len(annotated)==0:
                     return
                 else:
-                    t_target=np.max(inds)+1
+                    t_target=np.max(annotated)+1
             self.time=t_target
             self.update_time()
         elif key=="update_data":
