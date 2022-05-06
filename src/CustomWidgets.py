@@ -754,13 +754,12 @@ class DashboardTab(QWidget):
         chunknumber=(t-1)//self.chunksize
         if self.chunknumber!=chunknumber:
             for i in range(self.chunksize):
-                t=self.chunksize*chunknumber+i+1
-                self.time_label_buttons[i].setText(str(t) if t<self.T else "")
+                tt=self.chunksize*chunknumber+i+1
+                self.time_label_buttons[i].setText(str(t) if tt<self.T else "")
             self.chunknumber=chunknumber
 
         self.current_label_button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")
         self.current_label_button=self.time_label_buttons[(t-1)%self.chunksize]
-        print(t-1,(t-1)%self.chunksize)
         self.scrollarea.ensureWidgetVisible(self.current_label_button)
         self.current_label_button.setStyleSheet("background-color : rgb(42,99,246); border-radius: 4px;")
 
