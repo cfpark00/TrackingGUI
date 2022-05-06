@@ -93,13 +93,13 @@ class GUI():
                 if len(inds)==0:
                     return
                 else:
-                    t_target=np.min(inds)
+                    t_target=np.min(inds)+1
             else:
                 inds=annotated[annotated<self.time]
                 if len(inds)==0:
                     return
                 else:
-                    t_target=np.max(inds)
+                    t_target=np.max(inds)+1
             self.time=t_target
             self.update_time()
         elif key=="update_data":
