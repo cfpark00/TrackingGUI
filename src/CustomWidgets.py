@@ -760,6 +760,7 @@ class DashboardTab(QWidget):
 
         self.current_label_button.setStyleSheet("background-color : rgb(255,255,255); border-radius: 4px;")
         self.current_label_button=self.time_label_buttons[(t-1)%self.chunksize]
+        print(t-1,(t-1)%self.chunksize)
         self.scrollarea.ensureWidgetVisible(self.current_label_button)
         self.current_label_button.setStyleSheet("background-color : rgb(42,99,246); border-radius: 4px;")
 
