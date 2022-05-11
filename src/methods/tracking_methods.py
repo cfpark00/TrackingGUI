@@ -39,6 +39,7 @@ class NN():
                 params_dict[key]=eval(val)
         except:
             print("Parameter Parse Failure")
+            self.state=["Abort",0]
         self.params=self.default_params
         self.params.update(params_dict)
 
@@ -678,6 +679,8 @@ def run(name,command_pipe_sub,file_path,params):
     while True:
         command=command_pipe_sub.recv()
         if command=="run":
+            if method.state[0]=="Abort":
+                break
             thread.start()
         elif command=="report":
             command_pipe_sub.send(method.state)

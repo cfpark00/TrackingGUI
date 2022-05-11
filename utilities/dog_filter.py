@@ -19,8 +19,8 @@ parser.add_argument('-inplace', action='store_true', help='inplace modifies file
 parser.add_argument('-overwrite', action='store_true', help='overwrites destination file (default:False)')
 parser.add_argument('-num_random_minmax',type=int,default=10, help='number of random frames to pool min max from (default:10)')
 
-parser.add_argument('-s1',type=float,default=0.5, help='inner Gaussian sigma')
-parser.add_argument('-s2',type=float,default=3, help='outer Gaussian sigma')
+parser.add_argument('-s1',type=float,default=1., help='inner Gaussian sigma')
+parser.add_argument('-s2',type=float,default=5., help='outer Gaussian sigma')
 parser.add_argument('-kernel_size',default=21,type=int, help='kernel_size in pixels(must be odd)')
 
 args=parser.parse_args()
